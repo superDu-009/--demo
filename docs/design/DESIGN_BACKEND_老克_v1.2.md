@@ -5,10 +5,10 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名 | AI漫剧生产平台 |
-| 版本 | **v1.5** (SpringDoc API 文档) |
+| 版本 | **v1.7** (TosController接口开发) |
 | 基于 | PRD v1.1 MVP 终版 + 评审回复 (小欧/阿典) |
 | 创建日期 | 2026-04-19 |
-| 更新日期 | 2026-04-20 |
+| 更新日期 | 2026-04-21 |
 | 状态 | **评审通过，待开发** |
 
 ### 版本变更
@@ -20,6 +20,8 @@
 | **v1.3** | 2026-04-20 | 新增代码注释规范：关键行需有清晰明确的中文注释 |
 | **v1.4** | 2026-04-20 | 新增 SpringDoc / Swagger API 文档自动生成功能设计 |
 | **v1.5** | 2026-04-20 | 修复内部矛盾：SaTokenConfig 中移除 presign 接口的 .notMatch，与 4.7.1 鉴权标注保持一致 |
+| **v1.6** | 2026-04-21 | 新增Hutool通用工具类库依赖，后续开发优先使用其字符串、日期、加密、文件等工具API，避免重复造轮子 |
+| **v1.7** | 2026-04-21 | 新增TosController两个接口定义（presign/complete），补充DTO字段和完整接口说明，fileKey生成规则加入businessId
 
 ---
 
@@ -68,7 +70,10 @@
 | 视频处理 | FFmpeg | 系统命令调用 |
 | 重试 | Spring Retry | Spring Boot 内置 |
 | JSON | Jackson | Spring Boot 内置 |
+| 工具类 | Hutool | 5.8.32+ |
 | 构建 | Maven | 3.8+ |
+
+> **Hutool 用途说明**：通用工具类库，后续开发优先使用其提供的字符串、日期、加密、文件等工具API，避免重复造轮子。
 
 ### pom.xml 核心依赖
 
@@ -140,6 +145,13 @@
     <dependency>
         <groupId>org.springframework</groupId>
         <artifactId>spring-aspects</artifactId>
+    </dependency>
+
+    <!-- Hutool 通用工具类库 -->
+    <dependency>
+        <groupId>cn.hutool</groupId>
+        <artifactId>hutool-all</artifactId>
+        <version>5.8.32</version>
     </dependency>
 
     <!-- Lombok -->
@@ -1228,11 +1240,12 @@ public class SeedanceClient {
 {
   "fileName": "string, 必填, 原始文件名",
   "contentType": "string, 必填, MIME类型, 如 image/png, video/mp4",
-  "projectDir": "string, 可选, 项目目录前缀, 如 projects/123"
+  "source": "string, 必填, 枚举: frontend(前端上传) / backend(后端内部上传)",
+  "businessId": "long, 必填, 关联业务ID，如项目ID、资产ID"
 }
 ```
 
-> **v1.2 变更**：响应增加 `maxFileSize` 和 `allowedContentTypes`
+> **v1.7 变更**：移除 `projectDir` 字段，新增 `source`（枚举）和 `businessId`（业务关联ID）字段
 
 响应体:
 ```json
@@ -1240,13 +1253,13 @@ public class SeedanceClient {
   "code": 0,
   "data": {
     "uploadUrl": "string, 预签名PUT URL",
-    "accessUrl": "string, 上传完成后可访问的公开URL",
-    "expiresIn": "int, 预签名有效期(秒), 默认3600",
-    "maxFileSize": 52428800,
-    "allowedContentTypes": ["image/png", "image/jpeg", "video/mp4", "text/plain"]
+    "fileKey": "string, TOS中存储的唯一文件Key",
+    "expireSeconds": "int, 预签名有效期(秒), 默认3600"
   }
 }
 ```
+
+> **v1.7 变更**：移除 `maxFileSize` 和 `allowedContentTypes`，fileKey 生成规则改为 `{source}/{businessId}/{yyyyMMdd}/{fileType}/{8位随机数}_{URL编码文件名}`
 
 **POST /api/tos/complete**（新增）
 
@@ -1255,21 +1268,21 @@ public class SeedanceClient {
 请求体:
 ```json
 {
-  "key": "projects/123/novel_xxx.txt",
-  "projectId": 123,
-  "fileType": "string, 必填, novel(小说) / asset(资产参考图) / other",
-  "metadata": {
-    "originalName": "string",
-    "size": "long"
-  }
+  "fileKey": "string, 必填, TOS中存储的文件唯一Key",
+  "businessId": "long, 必填, 关联业务ID，如项目ID、资产ID",
+  "fileSize": "long, 必填, 文件大小（字节）",
+  "originalName": "string, 必填, 原始文件名"
 }
 ```
 
+> **v1.7 变更**：请求体改为 `fileKey` + `businessId` + `fileSize` + `originalName`，移除 `projectId`、`fileType`、`metadata` 嵌套结构
+
 后端处理逻辑:
 1. HEAD 请求校验文件确实存在于 TOS
-2. 根据 `fileType` 和 `projectId` 更新对应数据库记录（如 `project.novel_tos_path`）
-3. 写入 `api_call_log` 记录
-4. 如果 HEAD 校验失败，返回错误码 `40005 预签名URL已过期或文件不存在`
+2. 校验文件大小是否匹配
+3. 生成并返回公网访问 URL
+4. 后续业务关联逻辑（如更新数据库记录）再完善
+5. 如果 HEAD 校验失败，返回错误码 `51102 文件校验失败：文件不存在或链接已过期`
 
 #### 4.7.2 Service: `TosService`
 

@@ -1,6 +1,7 @@
 package com.lanyan.aidrama.common;
 
 import jakarta.servlet.http.HttpServletResponse;
+import com.lanyan.aidrama.common.exception.TosException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindException;
@@ -25,6 +26,16 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * TOS异常处理
+     */
+    @ExceptionHandler(TosException.class)
+    @ResponseStatus(HttpStatus.OK)
+    public Result<Void> handleTosException(TosException e) {
+        log.error("TOS异常: code={}, message={}", e.getErrorCode(), e.getMessage());
+        return Result.fail(e.getErrorCode(), e.getMessage());
+    }
 
     /**
      * 业务异常处理

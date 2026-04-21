@@ -1,0 +1,72 @@
+# ==============================================
+# System files
+# ==============================================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ==============================================
+# Java/SpringBoot backend
+# ==============================================
+*.class
+*.jar
+*.war
+*.ear
+*.nar
+target/
+build/
+.gradle/
+.idea/
+*.iml
+*.ipr
+*.iws
+.settings/
+.project
+.classpath
+.factorypath
+.vscode/
+*.log
+logs/
+application-local.yml
+application-dev.yml
+*.env
+.env.local
+*.db
+*.sqlite
+# 忽略敏感配置文件
+backend/src/main/resources/application.yml
+
+# ==============================================
+# Vue frontend
+# ==============================================
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.output/
+frontend/.nuxt/
+frontend/.next/
+*.local
+*.tsbuildinfo
+*.tsbuildinfo.*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-lock.yaml
+yarn.lock
+package-lock.json
+
+# ==============================================
+# Temp files
+# ==============================================
+tmp/
+temp/
+*.tmp
+*.temp
+*.zip
+*.rar
+*.7z
+*.tar.gz
+*.bak
+*.swp
+*.swo
+*~
