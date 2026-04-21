@@ -1,0 +1,46 @@
+// styles/variables.scss — 系分第 10 节：UI 规范变量定义
+@use "sass:math";
+
+// ===== 暗色主题颜色 =====
+// 页面背景色（深灰）
+$bg-page: #141414;
+// 卡片背景色
+$bg-card: #1d1e1f;
+// 边框色
+$border-color: #363637;
+// 主色调（Element Plus 默认蓝）
+$primary-color: #409EFF;
+// 文字主色
+$text-primary: #e5eaf3;
+// 文字次要色
+$text-secondary: #a3a6ad;
+// 文字三级色
+$text-tertiary: #80848f;
+// 文字禁用色
+$text-disabled: #5d5e62;
+
+// ===== 布局规范 =====
+// 页面内边距
+$page-padding: 24px;
+// 卡片间距
+$card-gap: 16px;
+// 表单 label 宽度
+$form-label-width: 100px;
+// 按钮最小宽度
+$btn-min-width: 80px;
+
+// ===== 分镜卡片 =====
+// 分镜卡片固定高度（v1.1 阿典 4.1）
+$shot-card-height: 280px;
+// 图片卡片比例 16:9（使用 math.div 避免 Sass 除法弃用警告）
+$image-aspect-ratio: math.div(16, 9);
+
+// ===== 响应式断点 =====
+// xs: < 768px, sm: 768-1024px, md: 1024-1440px, lg: > 1440px
+$breakpoint-xs: 768px;
+$breakpoint-sm: 1024px;
+$breakpoint-md: 1440px;
+
+// ===== 过渡动画 =====
+$transition-fast: 0.15s ease;
+$transition-normal: 0.3s ease;

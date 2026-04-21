@@ -1,0 +1,7 @@
+// styles/index.scss — 全局样式入口
+// 按顺序引入：变量 → 重置 → 暗色主题
+// 注：使用 @import 以确保变量在全局命名空间可用（@use 会隔离作用域）
+
+@import './variables.scss';
+@import './reset.scss';
+@import './dark-theme.scss';

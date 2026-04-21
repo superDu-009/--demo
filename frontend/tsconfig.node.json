@@ -1,0 +1,11 @@
+// tsconfig.node.json — Node 环境 TS 配置（供 vite.config.ts 使用）
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true
+  },
+  "include": ["vite.config.ts"]
+}
