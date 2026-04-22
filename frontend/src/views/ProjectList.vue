@@ -4,7 +4,6 @@
   <div class="project-list-page">
     <!-- 顶部工具栏 -->
     <div class="toolbar">
-      <h1 class="page-title">项目列表</h1>
       <div class="toolbar-actions">
         <!-- 搜索框 -->
         <el-input
@@ -19,7 +18,7 @@
           </template>
         </el-input>
         <!-- 创建项目按钮 -->
-        <el-button type="primary" @click="openCreateDialog">
+        <el-button type="primary" class="btn-gradient" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
           新建项目
         </el-button>
@@ -30,43 +29,49 @@
     <div class="project-card-list" v-loading="loading">
       <el-row :gutter="16">
         <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="project in projectList" :key="project.id">
-          <el-card class="project-card" shadow="hover" @click="goToDetail(project.id)">
-            <template #header>
-              <div class="card-header">
-                <span class="project-name" :title="project.name">{{ project.name }}</span>
-                <!-- <StatusTag :status="project.status" /> -->
-<span class="status-tag">{{ project.status === 0 ? '草稿' : project.status === 1 ? '进行中' : '已完成' }}</span>
+          <el-card class="project-card card-glass border-neon" @click="goToDetail(project.id)">
+            <!-- 项目封面 -->
+            <div class="project-cover">
+              <img :src="getProjectCover(project.id)" alt="项目封面" class="cover-img">
+              <div class="cover-overlay">
+                <span class="status-tag">{{ project.status === 0 ? '草稿' : project.status === 1 ? '进行中' : '已完成' }}</span>
               </div>
-            </template>
-            <div class="project-desc" :title="project.description || '暂无描述'">
-              {{ project.description || '暂无描述' }}
             </div>
-            <div class="project-meta">
-              <span class="meta-item">
-                <el-icon><Calendar /></el-icon>
-                {{ formatDate(project.createTime) }}
-              </span>
-              <span class="meta-item" v-if="project.executionLock">
-                <el-icon><Lock /></el-icon>
-                执行中
-              </span>
-            </div>
-            <div class="card-actions">
-              <el-button
-                size="small"
-                @click.stop="openEditDialog(project)"
-                :disabled="project.status !== 0"
-              >
-                编辑
-              </el-button>
-              <el-button
-                size="small"
-                type="danger"
-                @click.stop="handleDelete(project)"
-                :disabled="project.executionLock === 1"
-              >
-                删除
-              </el-button>
+            
+            <div class="card-content">
+              <div class="card-header">
+                <span class="project-name text-neon" :title="project.name">{{ project.name }}</span>
+              </div>
+              <div class="project-desc" :title="project.description || '暂无描述'">
+                {{ project.description || '暂无描述' }}
+              </div>
+              <div class="project-meta">
+                <span class="meta-item">
+                  <el-icon><Calendar /></el-icon>
+                  {{ formatDate(project.createTime) }}
+                </span>
+                <span class="meta-item" v-if="project.executionLock">
+                  <el-icon><Lock /></el-icon>
+                  执行中
+                </span>
+              </div>
+              <div class="card-actions">
+                <el-button
+                  size="small"
+                  @click.stop="openEditDialog(project)"
+                  :disabled="project.status !== 0"
+                >
+                  编辑
+                </el-button>
+                <el-button
+                  size="small"
+                  type="danger"
+                  @click.stop="handleDelete(project)"
+                  :disabled="project.executionLock === 1"
+                >
+                  删除
+                </el-button>
+              </div>
             </div>
           </el-card>
         </el-col>
@@ -305,6 +310,17 @@ const formatDate = (date: string) => {
   return dayjs(date).format('YYYY-MM-DD HH:mm')
 }
 
+// 获取项目默认封面
+const getProjectCover = (id: number) => {
+  const covers = [
+    '/assets/images/project-cover-japanese.png',
+    '/assets/images/project-cover-chinese.png',
+    '/assets/images/project-cover-scifi.png',
+    '/assets/images/project-cover-q.png'
+  ]
+  return covers[id % covers.length]
+}
+
 // 页面加载时获取项目列表
 onMounted(() => {
   fetchProjectList()
@@ -321,17 +337,10 @@ onMounted(() => {
 .toolbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   margin-bottom: 24px;
   padding-bottom: 16px;
   border-bottom: 1px solid $border-color;
-}
-
-.page-title {
-  font-size: 24px;
-  font-weight: 600;
-  color: $text-primary;
-  margin: 0;
 }
 
 .toolbar-actions {
@@ -344,59 +353,97 @@ onMounted(() => {
 }
 
 .project-card {
-  height: 220px;
+  height: 300px;
   margin-bottom: 16px;
   cursor: pointer;
   transition: all 0.3s ease;
-  border-radius: 8px;
+  border-radius: 12px;
+  padding: 0;
+  overflow: hidden;
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+    transform: translateY(-4px);
+  }
+
+  // 项目封面
+  .project-cover {
+    position: relative;
+    height: 130px;
+    width: 100%;
+    overflow: hidden;
+    border-radius: 12px 12px 0 0;
+
+    .cover-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.5s ease;
+    }
+
+    .cover-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(10,10,18,0.8));
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      padding: 12px;
+
+      .status-tag {
+        padding: 4px 10px;
+        border-radius: 20px;
+        font-size: 12px;
+        color: #fff;
+        backdrop-filter: blur(8px);
+        &:contains('草稿') {
+          background: rgba(144, 147, 153, 0.8);
+        }
+        &:contains('进行中') {
+          background: rgba(64, 158, 255, 0.8);
+        }
+        &:contains('已完成') {
+          background: rgba(103, 194, 58, 0.8);
+        }
+      }
+    }
+  }
+
+  &:hover .cover-img {
+    transform: scale(1.05);
+  }
+
+  // 卡片内容
+  .card-content {
+    padding: 16px;
   }
 
   .card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
+    margin-bottom: 8px;
   }
 
   .project-name {
-    font-weight: 500;
-    font-size: 16px;
+    font-weight: 600;
+    font-size: 17px;
     color: $text-primary;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    max-width: 180px;
-  }
-
-  .status-tag {
-    padding: 2px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    color: #fff;
-    &:nth-of-type(1) {
-      background: #909399; /* 草稿 */
-    }
-    &:nth-of-type(2) {
-      background: #409EFF; /* 进行中 */
-    }
-    &:nth-of-type(3) {
-      background: #67C23A; /* 已完成 */
-    }
+    max-width: 100%;
   }
 
   .project-desc {
-    height: 60px;
-    font-size: 14px;
+    height: 44px;
+    font-size: 13px;
     color: $text-secondary;
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
+    -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
-    margin-bottom: 16px;
+    margin-bottom: 12px;
   }
 
   .project-meta {

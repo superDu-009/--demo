@@ -5,3 +5,324 @@
 @import './variables.scss';
 @import './reset.scss';
 @import './dark-theme.scss';
+
+// ===== 全局赛博朋克风格样式 =====
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  // 深空渐变背景，带AI生成的赛博朋克网格纹理
+  background: $bg-page url('/assets/images/bg-texture.png');
+  background-size: 200px 200px;
+  background-repeat: repeat;
+  color: $text-primary;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+// 全局毛玻璃卡片效果
+.card-glass {
+  background: $bg-card;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  transition: all 0.3s ease;
+  
+  &:hover {
+    border-color: $border-glow-color;
+    box-shadow: 0 0 20px rgba(100, 108, 255, 0.3), 0 8px 32px rgba(0, 0, 0, 0.3);
+    transform: translateY(-2px);
+  }
+}
+
+// 霓虹发光边框效果
+.border-neon {
+  position: relative;
+  border: 1px solid $border-color;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: $primary-gradient;
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  &:hover::before {
+    opacity: 1;
+  }
+}
+
+// 渐变按钮样式
+.btn-gradient {
+  background: $primary-gradient;
+  border: none;
+  color: white;
+  transition: all 0.3s ease;
+  
+  &:hover {
+    box-shadow: 0 0 20px rgba(100, 108, 255, 0.5);
+    transform: translateY(-1px);
+  }
+}
+
+// 霓虹文字效果
+.text-neon {
+  background: $primary-gradient;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+// 上传区域动效
+.upload-area-neon {
+  transition: all 0.3s ease;
+  
+  &.dragover {
+    border-color: $border-glow-color;
+    box-shadow: 0 0 30px rgba(100, 108, 255, 0.4);
+    animation: pulse-glow 1s infinite alternate;
+  }
+}
+
+// 发光脉冲动画
+@keyframes pulse-glow {
+  from {
+    box-shadow: 0 0 20px rgba(100, 108, 255, 0.3);
+  }
+  to {
+    box-shadow: 0 0 40px rgba(100, 108, 255, 0.6);
+  }
+}
+
+// ===== 全局Element Plus组件样式统一覆盖
+// ==============================
+
+// 基础组件
+.el-card {
+  @extend .card-glass;
+  @extend .border-neon;
+}
+
+.el-button--primary {
+  @extend .btn-gradient;
+}
+
+// 弹窗
+:deep(.el-dialog) {
+  .el-dialog__header {
+    background: rgba(22, 24, 38, 0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(100, 108, 255, 0.2);
+    padding: 20px 24px;
+    .el-dialog__title {
+      color: $text-primary;
+      font-weight: 600;
+      font-size: 18px;
+    }
+  }
+
+  .el-dialog__body {
+    background: rgba(22, 24, 38, 0.95);
+    backdrop-filter: blur(12px);
+    padding: 24px;
+    color: $text-primary;
+  }
+
+  .el-dialog__footer {
+    background: rgba(22, 24, 38, 0.95);
+    backdrop-filter: blur(12px);
+    border-top: 1px solid rgba(100, 108, 255, 0.2);
+    padding: 16px 24px;
+  }
+
+  .el-dialog__wrapper {
+    backdrop-filter: blur(4px);
+    background: rgba(0, 0, 0, 0.5);
+  }
+}
+
+// 表单元素
+:deep(.el-form-item__label) {
+  color: $text-primary;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+:deep(.el-input__wrapper) {
+  height: 44px;
+  background: rgba(22, 24, 38, 0.7);
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  box-shadow: none;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: $border-glow-color;
+  }
+
+  &.is-focus {
+    border-color: $border-glow-color;
+    box-shadow: 0 0 12px rgba(100, 108, 255, 0.2);
+  }
+
+  .el-input__inner {
+    color: $text-primary;
+    &::placeholder {
+      color: $text-tertiary;
+    }
+  }
+}
+
+:deep(.el-textarea__inner) {
+  background: rgba(22, 24, 38, 0.7);
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  color: $text-primary;
+  transition: all 0.3s ease;
+
+  &:hover {
+    border-color: $border-glow-color;
+  }
+
+  &:focus {
+    border-color: $border-glow-color;
+    box-shadow: 0 0 12px rgba(100, 108, 255, 0.2);
+  }
+
+  &::placeholder {
+    color: $text-tertiary;
+  }
+}
+
+:deep(.el-select) {
+  .el-input__wrapper {
+    height: 44px;
+  }
+  .el-select__tags-text {
+    color: $text-primary;
+  }
+}
+
+:deep(.el-select-dropdown) {
+  background: rgba(22, 24, 38, 0.98);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  border-radius: 8px;
+  .el-select-dropdown__item {
+    color: $text-primary;
+    &.is-selected {
+      background: rgba(100, 108, 255, 0.2);
+      color: $primary-color;
+      font-weight: 500;
+    }
+    &:hover {
+      background: rgba(100, 108, 255, 0.1);
+    }
+  }
+  .el-select-dropdown__empty {
+    color: $text-secondary;
+  }
+}
+
+:deep(.el-radio) {
+  .el-radio__input.is-checked .el-radio__inner {
+    background: $primary-gradient;
+    border-color: $border-glow-color;
+  }
+  .el-radio__label {
+    color: $text-primary;
+  }
+}
+
+:deep(.el-checkbox) {
+  .el-checkbox__input.is-checked .el-checkbox__inner {
+    background: $primary-gradient;
+    border-color: $border-glow-color;
+  }
+  .el-checkbox__label {
+    color: $text-primary;
+  }
+}
+
+// 标签
+:deep(.el-tag) {
+  border-radius: 20px;
+  backdrop-filter: blur(8px);
+  background: rgba(100, 108, 255, 0.1);
+  border: none;
+}
+
+// 消息提示
+:deep(.el-message) {
+  background: rgba(22, 24, 38, 0.95);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  border-radius: 8px;
+  .el-message__content {
+    color: $text-primary;
+  }
+}
+
+// 加载
+:deep(.el-loading-mask) {
+  background: rgba(10, 10, 18, 0.7);
+  backdrop-filter: blur(4px);
+  .el-loading-spinner .path {
+    stroke: $primary-color;
+  }
+  .el-loading-text {
+    color: $text-primary;
+  }
+}
+
+// 空状态
+:deep(.el-empty) {
+  .el-empty__description {
+    color: $text-secondary;
+  }
+}
+
+// 分页
+:deep(.el-pagination) {
+  .el-pager li {
+    background: rgba(22, 24, 38, 0.7);
+    border: 1px solid rgba(100, 108, 255, 0.2);
+    border-radius: 8px;
+    color: $text-secondary;
+    &.is-active {
+      background: $primary-gradient;
+      color: white;
+      box-shadow: 0 0 12px rgba(100, 108, 255, 0.3);
+    }
+    &:hover {
+      color: $primary-color;
+      border-color: $border-glow-color;
+    }
+  }
+  .el-pagination__btn-prev, .el-pagination__btn-next {
+    background: rgba(22, 24, 38, 0.7);
+    border: 1px solid rgba(100, 108, 255, 0.2);
+    border-radius: 8px;
+    color: $text-secondary;
+    &:hover {
+      color: $primary-color;
+      border-color: $border-glow-color;
+    }
+  }
+  .el-pagination__jump .el-input__wrapper {
+    background: rgba(22, 24, 38, 0.7);
+  }
+}

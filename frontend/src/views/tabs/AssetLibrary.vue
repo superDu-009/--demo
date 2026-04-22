@@ -6,13 +6,17 @@
     <div class="toolbar">
       <div class="toolbar-left">
         <!-- 资产类型 Tab -->
-        <el-radio-group v-model="assetType" class="asset-type-tabs" @change="handleTypeChange">
-          <el-radio-button label="all">全部</el-radio-button>
-          <el-radio-button label="character">角色</el-radio-button>
-          <el-radio-button label="scene">场景</el-radio-button>
-          <el-radio-button label="prop">物品</el-radio-button>
-          <el-radio-button label="voice">声音</el-radio-button>
-        </el-radio-group>
+        <div class="asset-type-tabs">
+          <div
+            v-for="type in assetTypeList"
+            :key="type.value"
+            class="tab-item"
+            :class="{ active: assetType === type.value }"
+            @click="assetType = type.value; handleTypeChange()"
+          >
+            {{ type.label }}
+          </div>
+        </div>
       </div>
       <div class="toolbar-right">
         <!-- 搜索框 -->
@@ -28,7 +32,7 @@
           </template>
         </el-input>
         <!-- 新建资产按钮 -->
-        <el-button type="primary" @click="openCreateDialog">
+        <el-button class="btn-gradient" @click="openCreateDialog">
           <el-icon><Plus /></el-icon>
           新建资产
         </el-button>
@@ -101,7 +105,7 @@ import { ElMessage } from 'element-plus'
 import { assetApi } from '@/api/asset'
 import type { AssetVO } from '@/types'
 // 缺失组件，临时注释
-// import AssetCard from '@/components/Asset/AssetCard.vue'
+import AssetCard from '@/components/Asset/AssetCard.vue'
 // import AssetForm from '@/components/Asset/AssetForm.vue'
 
 const route = useRoute()
@@ -123,6 +127,15 @@ const deleteWarning = ref('')
 
 // 当前选中的资产类型
 const assetType = ref<'all' | 'character' | 'scene' | 'prop' | 'voice'>('all')
+
+// 资产类型列表
+const assetTypeList = [
+  { value: 'all', label: '全部' },
+  { value: 'character', label: '角色' },
+  { value: 'scene', label: '场景' },
+  { value: 'prop', label: '物品' },
+  { value: 'voice', label: '声音' }
+]
 
 // 分页参数
 const pageParams = reactive({
@@ -270,17 +283,31 @@ onMounted(() => {
 }
 
 .asset-type-tabs {
-  :deep(.el-radio-button__inner) {
-    border-radius: 4px;
-    margin-right: 8px;
-    border: 1px solid $border-color;
-    background: $bg-color;
-    color: $text-secondary;
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: rgba(22, 24, 38, 0.7);
+  border-radius: 12px;
+  border: 1px solid rgba(100, 108, 255, 0.2);
 
-    &.is-active {
-      background: $primary-color;
-      border-color: $primary-color;
+  .tab-item {
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    color: $text-secondary;
+    cursor: pointer;
+    transition: all 0.3s ease;
+
+    &:hover {
+      background: rgba(100, 108, 255, 0.1);
+      color: $primary-color;
+    }
+
+    &.active {
+      background: $primary-gradient;
       color: #fff;
+      box-shadow: 0 0 12px rgba(100, 108, 255, 0.3);
     }
   }
 }

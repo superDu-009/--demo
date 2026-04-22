@@ -1,23 +1,33 @@
 // styles/variables.scss — 系分第 10 节：UI 规范变量定义
 @use "sass:math";
 
-// ===== 暗色主题颜色 =====
-// 页面背景色（深灰）
-$bg-page: #141414;
-// 卡片背景色
-$bg-card: #1d1e1f;
-// 边框色
-$border-color: #363637;
-// 主色调（Element Plus 默认蓝）
-$primary-color: #409EFF;
-// 文字主色
-$text-primary: #e5eaf3;
+// ===== 赛博朋克元宇宙主题颜色 =====
+// 页面背景色（深空黑，带细微渐变）
+$bg-page: #0a0a12;
+// 卡片背景色（半透明毛玻璃效果）
+$bg-card: rgba(22, 24, 38, 0.7);
+// 边框主色（霓虹蓝紫渐变）
+$border-color: #3636d0;
+// 霓虹发光边框色
+$border-glow-color: #646cff;
+// 主色调（蓝紫渐变主色）
+$primary-color: #646cff;
+// 主色调渐变
+$primary-gradient: linear-gradient(135deg, #646cff 0%, #a855f7 100%);
+// 霓虹点缀色（粉）
+$accent-pink: #ec4899;
+// 霓虹点缀色（绿）
+$accent-green: #10b981;
+// 霓虹点缀色（黄）
+$accent-yellow: #f59e0b;
+// 文字主色（纯白带点蓝调）
+$text-primary: #f0f0ff;
 // 文字次要色
-$text-secondary: #a3a6ad;
+$text-secondary: #b4b4d4;
 // 文字三级色
-$text-tertiary: #80848f;
+$text-tertiary: #8888aa;
 // 文字禁用色
-$text-disabled: #5d5e62;
+$text-disabled: #555577;
 
 // ===== 布局规范 =====
 // 页面内边距

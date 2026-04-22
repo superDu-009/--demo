@@ -7,6 +7,9 @@ import ElementPlus from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn' // Element Plus 中文语言包
 import 'element-plus/dist/index.css'
 import 'element-plus/theme-chalk/dark/css-vars.css' // Element Plus 暗色主题 CSS 变量
+// 引入viog-ui元宇宙风格UI库
+import VioGUI from 'viog-ui'
+import 'viog-ui/dist/viog-ui.css'
 
 import App from './App.vue'
 import router from './router'
@@ -20,6 +23,8 @@ app.use(createPinia())
 app.use(router)
 // 注册 Element Plus 组件库（使用中文语言包）
 app.use(ElementPlus, { locale: zhCn })
+// 注册viog-ui组件库
+app.use(VioGUI)
 
 // 全局异常捕获（系分第 12 节）
 app.config.errorHandler = (err, instance, info) => {

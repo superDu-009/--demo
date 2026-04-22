@@ -3,9 +3,9 @@
   <div class="tos-upload">
     <!-- 拖拽上传区域 -->
     <div
-      class="upload-area"
+      class="upload-area upload-area-neon card-glass border-neon"
       :class="{
-        'upload-area-dragover': isDragover,
+        'dragover': isDragover,
         'upload-area-disabled': disabled || uploading
       }"
       @click="handleClick"
@@ -13,14 +13,14 @@
       @dragover.prevent="handleDragover"
       @dragleave.prevent="handleDragleave"
     >
-      <el-icon v-if="!uploading" class="upload-icon" :size="48"><UploadFilled /></el-icon>
-      <el-progress v-else type="circle" :percentage="progress" :width="48" />
+      <el-icon v-if="!uploading" class="upload-icon text-neon" :size="48"><UploadFilled /></el-icon>
+      <el-progress v-else type="circle" :percentage="progress" :width="48" color="#646cff"/>
       
       <p class="upload-text" v-if="!uploading">
-        {{ buttonText }}<br>
+        <span class="text-neon">{{ buttonText }}</span><br>
         <span class="upload-tip">支持拖放上传，{{ tipText }}</span>
       </p>
-      <p class="upload-text" v-else>上传中 {{ progress }}%</p>
+      <p class="upload-text" v-else><span class="text-neon">上传中 {{ progress }}%</span></p>
       
       <input
         ref="fileInputRef"
@@ -33,12 +33,12 @@
     </div>
 
     <!-- 上传成功展示 -->
-    <div v-if="showPreview && fileUrl" class="preview-area">
+    <div v-if="showPreview && fileUrl" class="preview-area card-glass">
       <!-- 图片预览 -->
       <el-image v-if="isImageType(fileUrl)" :src="fileUrl" class="preview-image" fit="cover" />
       <!-- 文件预览 -->
       <div v-else class="preview-file">
-        <el-icon :size="32"><Document /></el-icon>
+        <el-icon :size="32" class="text-neon"><Document /></el-icon>
         <span class="file-name">{{ fileName }}</span>
       </div>
       <el-button type="danger" size="small" icon="Delete" @click="handleDelete" class="delete-btn">删除</el-button>
@@ -201,9 +201,8 @@ const isImageType = (url: string) => {
   position: relative;
   width: 100%;
   min-height: 150px;
-  border: 2px dashed #dcdfe6;
-  border-radius: 6px;
-  background-color: #fafafa;
+  border: 2px dashed rgba(100, 108, 255, 0.3);
+  border-radius: 12px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -211,35 +210,27 @@ const isImageType = (url: string) => {
   cursor: pointer;
   transition: all 0.3s;
 
-  &:hover {
-    border-color: #409eff;
-    background-color: #f5f7fa;
-  }
-
-  &-dragover {
-    border-color: #409eff;
-    background-color: #ecf5ff;
+  &.dragover {
+    border-color: $border-glow-color;
   }
 
   &-disabled {
     cursor: not-allowed;
     opacity: 0.6;
-    background-color: #f5f7fa;
   }
 
   .upload-icon {
-    color: #909399;
     margin-bottom: 16px;
   }
 
   .upload-text {
     text-align: center;
-    color: #606266;
+    color: $text-primary;
     font-size: 14px;
     line-height: 22px;
 
     .upload-tip {
-      color: #909399;
+      color: $text-secondary;
       font-size: 12px;
     }
   }
@@ -258,8 +249,7 @@ const isImageType = (url: string) => {
 .preview-area {
   margin-top: 12px;
   position: relative;
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
+  border-radius: 12px;
   padding: 12px;
   display: flex;
   align-items: center;
@@ -268,7 +258,8 @@ const isImageType = (url: string) => {
   .preview-image {
     width: 80px;
     height: 80px;
-    border-radius: 4px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
   .preview-file {
@@ -279,7 +270,7 @@ const isImageType = (url: string) => {
 
     .file-name {
       font-size: 14px;
-      color: #303133;
+      color: $text-primary;
     }
   }
 
