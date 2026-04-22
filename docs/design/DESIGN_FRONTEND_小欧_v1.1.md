@@ -5,13 +5,20 @@
 | 项目 | 内容 |
 |------|------|
 | 产品名 | AI漫剧生产平台 |
-| 版本 | v1.3（UI风格升级+TOS上传组件实现） |
+| 版本 | v1.4（当前代码对齐+TOS上传联调修订） |
 | 基于 | PRD v1.1 终版 + 后端系分 DESIGN_BACKEND_老克_v1.2 |
 | 作者 | 小欧（前端架构师） |
 | 评审人 | 蓝烟老师、老克、阿典 |
 | 创建日期 | 2026-04-19 |
 | 修订日期 | 2026-04-22 |
-| 状态 | 评审通过 |
+| 状态 | 开发中（已按当前代码修订） |
+
+**v1.4 变更说明（2026-04-22，按当前代码对齐）：**
+1. 对齐当前实际技术栈：Vue 3 + Vite + TypeScript + Pinia + Element Plus + viog-ui。
+2. 对齐当前实际组件结构：主布局为 `components/Layout/AppLayout.vue`；已实现 `components/Common/TosUpload.vue`、`components/Common/EmptyState.vue`、`components/Asset/AssetCard.vue`。
+3. 修订 TOS 上传实现细节：`TosUpload` 组件优先使用父组件传入的 `accept`，支持 `.txt/.docx/.md` 文件选择；`useTosUpload` 对浏览器返回空 MIME 的 `.md/.txt/.docx` 做 contentType fallback。
+4. 补充 TOS 直传联调要求：Bucket 必须配置 CORS，允许本地前端 Origin、`PUT/GET/HEAD` 方法和 `Content-Type` 请求头。
+5. 对齐当前实现状态：登录、项目列表、项目详情骨架、TOS 上传、轮询 composable 已实现；资产库页面模板、真实工作流联调、分镜工作台、API 成本看板仍待补齐。
 
 **v1.3 变更说明：**
 1. UI风格全面升级为赛博朋克元宇宙科技风，引入viog-ui组件库
@@ -96,6 +103,7 @@ const uploadToTos = async (file: File) => {
 | 语言 | TypeScript | 5.3+ | 类型安全 |
 | 构建 | Vite | 5.x | 构建工具 |
 | UI 组件库 | Element Plus | 2.7+ | 组件库 |
+| UI 风格库 | viog-ui | 0.16+ | 元宇宙风格组件与视觉增强 |
 | 拖拽 | SortableJS + vue.draggable.next | 1.15+ / 2.24+ | 流程编辑器拖拽 |
 | 状态管理 | Pinia | 2.1+ | 全局状态 |
 | HTTP | Axios | 1.6+ | 网络请求 |
@@ -103,6 +111,7 @@ const uploadToTos = async (file: File) => {
 | ~~虚拟滚动~~ | ~~vue-virtual-scroller~~ | ~~2.0+~~ | ~~[v1.1 已移除] 改用分页模式~~ |
 | 图标 | @element-plus/icons-vue | 2.3+ | 图标库 |
 | 日期 | dayjs | 1.11+ | 日期处理 |
+| 对象存储 | @volcengine/tos-sdk | 2.9+ | TOS SDK 预留；当前上传主链路使用预签名 URL + XHR PUT |
 
 > **v1.1 变更：** 移除 `vue-virtual-scroller` 依赖。分镜工作台改为分页模式（详见 4.6 节），减少一个第三方依赖。
 
@@ -226,6 +235,13 @@ frontend/
 > **v1.1 变更：**
 > - 新增 `composables/useWorkflowPolling.ts`（从 workflow store 抽取轮询逻辑）
 > - 删除 `composables/useWorkflowStatus.ts`（v1.0 中声明但未实现）
+
+> **v1.4 当前代码说明：**
+> - 当前实际布局组件为 `components/Layout/AppLayout.vue`，未拆分 `AppHeader.vue` 与 `AppSidebar.vue`。
+> - 当前通用上传组件为 `components/Common/TosUpload.vue`，替代早期设计中的 `ImageUploader`。
+> - 当前已存在 `components/Common/EmptyState.vue` 与 `components/Asset/AssetCard.vue`；`AssetForm.vue`、`Workflow/*.vue`、`Shot/*.vue` 尚未落地。
+> - 当前静态图片位于 `public/assets/images/`，不是 `src/assets/images/`。
+> - 当前 `AssetLibrary.vue` 只有脚本逻辑，缺少模板渲染；`WorkflowEditor.vue` 为本地模拟执行；`ShotWorkbench.vue` 为占位页；`ApiCost.vue` 为静态假数据。
 
 ---
 
@@ -396,7 +412,9 @@ const handleLogin = async () => {
 **新建项目弹窗：**
 - 项目名称（必填，最大200字符）
 - 项目描述（可选，Textarea）
-- 小说文件上传（`ImageUploader` 组件调用 TOS 预签名直传）
+- 小说文件上传（`TosUpload` 组件调用 TOS 预签名直传）
+- 当前允许扩展名：`.txt/.docx/.md`；文件选择框使用 `accept=".txt,.docx,.md"`，上传前仍按 MIME/扩展名双重校验
+- `.md/.txt/.docx` 在部分浏览器中可能出现 `file.type` 为空，前端需在 `useTosUpload` 中按扩展名补齐 `contentType`
 
 ---
 
@@ -421,11 +439,18 @@ const handleLogin = async () => {
 - 进入页面时调用 `projectStore.fetchProjectDetail(id)`
 - 项目基本信息固定在顶部展示栏（名称、状态、执行锁标识）
 
+**v1.4 当前实现差异：**
+- 当前 `ProjectDetail.vue` 直接调用 `projectApi.getDetail(id)` 获取项目详情，暂未通过 `projectStore.fetchProjectDetail(id)` 统一写入 store。
+- 当前“编辑项目”按钮仅提示「编辑功能开发中」，尚未复用项目列表页的编辑弹窗。
+- 当前 Tab 激活态由 `activeTab` 初始化自 `route.name`，后续应补充对 `route.name` 的 watch，保证浏览器前进/后退或侧边栏跳转时高亮同步。
+
 ---
 
 ### 4.4 资产库（AssetLibrary）
 
 **组件路径：** `views/tabs/AssetLibrary.vue`
+
+**v1.4 当前实现状态：** 当前文件已实现资产查询、新建/编辑/删除/确认等脚本逻辑，但缺少 `<template>` 渲染结构，进入资产库路由时页面不会展示资产列表。需优先补齐模板、表单弹窗和卡片绑定。
 
 **布局：**
 - 顶部：资产类型 Tab 栏（角色 / 场景 / 物品 / 声音）
@@ -477,6 +502,8 @@ const handleLogin = async () => {
 ---
 
 ### 4.5 流程编辑器（WorkflowEditor）
+
+**v1.4 当前实现状态：** 当前 `views/tabs/WorkflowEditor.vue` 为本地模拟版本，保存/启动/终止/进度均使用 `setTimeout`、`setInterval` 和本地状态，尚未接入 `stores/workflow.ts`、`projectApi.saveWorkflow/startWorkflow/stopWorkflow/getWorkflowStatus`。后续应将当前静态步骤映射为后端 `WorkflowConfig.steps`，并使用 `useWorkflowPolling` 刷新真实执行状态。
 
 **组件路径：** `views/tabs/WorkflowEditor.vue`
 
@@ -584,6 +611,8 @@ PUT /api/project/{id}/workflow
 ---
 
 ### 4.6 分镜工作台（ShotWorkbench）
+
+**v1.4 当前实现状态：** 当前 `views/tabs/ShotWorkbench.vue` 仍为占位页，仅展示「Sprint 3 实现分镜工作台功能」。分集/分场导航、分镜分页列表、批量审核、重新生成、资产绑定、AI 任务轮询均未接入页面。
 
 **组件路径：** `views/tabs/ShotWorkbench.vue`
 
@@ -711,6 +740,8 @@ interface BatchReviewRequest {
 ---
 
 ### 4.7 API 消耗看板（ApiCost）
+
+**v1.4 当前实现状态：** 当前 `views/tabs/ApiCost.vue` 使用硬编码统计卡片和表格数据，趋势图为占位文本，尚未调用 `aiApi.getCostReport` 或后端真实统计接口。
 
 **组件路径：** `views/tabs/ApiCost.vue`
 
@@ -1912,10 +1943,18 @@ export function useWorkflowPolling() {
 > - **complete 失败仅重试 1 次，不搞 3 次重试 + 递增延迟 + 监控日志上报**
 > - `extractKeyFromUrl` 增加 `decodeURIComponent` 处理
 
+> **v1.4 当前代码修订：**
+> - `TosUpload.vue` 的文件选择 `accept` 优先使用父组件传入值；新建项目小说上传传入 `.txt,.docx,.md`，避免只按 MIME 过滤导致 `.md` 文件无法选择。
+> - `useTosUpload.ts` 新增 `getContentType(file)`：当浏览器返回 `file.type === ''` 时，按扩展名补齐 `.md/.markdown -> text/markdown`、`.txt -> text/plain`、`.docx -> application/vnd.openxmlformats-officedocument.wordprocessingml.document`。
+> - `tosApi.presign` 请求字段与当前后端 DTO 对齐：`fileName/contentType/source/businessId`。
+> - `tosApi.complete` 请求字段与当前后端 DTO 对齐：`fileKey/businessId/fileSize/originalName`。
+> - TOS 直传的 XHR `Content-Type` 必须使用预签名时相同的 `contentType`，因为后端生成 URL 时已签入 `content-type`。
+> - Bucket CORS 必须允许前端 Origin、`PUT/GET/HEAD`、`Content-Type`。开发环境建议固定 Vite 端口或在 TOS 控制台列出常用 localhost 端口。
+
 ```typescript
 import { ref } from 'vue'
 import { tosApi } from '@/api/tos'
-import type { PresignResult } from '@/types'
+import type { TosCompleteRequest } from '@/types'
 import { ElMessage } from 'element-plus'
 
 export interface UploadOptions {
@@ -1924,15 +1963,19 @@ export interface UploadOptions {
   projectDir?: string
   maxFileSize?: number  // 默认 50MB
   allowedTypes?: string[] // 默认 ['image/png', 'image/jpeg', 'video/mp4', 'text/plain']
-  onSuccess?: (accessUrl: string) => void
+  onProgress?: (percent: number) => void
+  onSuccess?: (accessUrl: string, key: string) => void
   onError?: (error: Error) => void
 }
 
 export function useTosUpload() {
   const uploading = ref(false)
   const progress = ref(0)
+  let xhr: XMLHttpRequest | null = null
 
-  async function upload(file: File, options: UploadOptions): Promise<string> {
+  async function upload(file: File, options: UploadOptions, retryCount = 0): Promise<string> {
+    const MAX_RETRY = 3
+
     // 1. 校验文件
     const maxFileSize = options.maxFileSize || 50 * 1024 * 1024
     if (file.size > maxFileSize) {
@@ -1940,9 +1983,10 @@ export function useTosUpload() {
       throw new Error('File too large')
     }
 
-    const allowedTypes = options.allowedTypes || ['image/png', 'image/jpeg', 'video/mp4', 'text/plain']
-    if (!allowedTypes.includes(file.type)) {
-      ElMessage.error(`不支持的文件类型: ${file.type}`)
+    const allowedTypes = options.allowedTypes || ['image/png', 'image/jpeg', 'video/mp4', 'text/plain', 'text/markdown']
+    const contentType = getContentType(file)
+    if (!contentType || !allowedTypes.includes(contentType)) {
+      ElMessage.error(`不支持的文件类型: ${file.type || file.name.split('.').pop()}`)
       throw new Error('Unsupported file type')
     }
 
@@ -1953,45 +1997,45 @@ export function useTosUpload() {
       // 2. 获取预签名 URL
       const presignRes = await tosApi.presign({
         fileName: file.name,
-        contentType: file.type,
-        projectDir: options.projectDir
+        contentType,
+        source: 'frontend',
+        businessId: options.projectId
       })
       const presignResult = presignRes.data
 
       // 3. 直传 TOS
-      await uploadToTos(presignResult.uploadUrl, file)
+      await uploadToTos(presignResult.uploadUrl, file, contentType, options.onProgress)
 
       // 4. 通知后端（v1.1：complete 失败仅重试 1 次，阿典 2.1）
       try {
         await tosApi.complete({
-          key: extractKeyFromUrl(presignResult.uploadUrl),
-          projectId: options.projectId,
-          fileType: options.fileType,
-          metadata: { originalName: file.name, size: file.size }
-        })
+          fileKey: presignResult.fileKey,
+          businessId: options.projectId,
+          fileSize: file.size,
+          originalName: file.name
+        } as TosCompleteRequest)
       } catch (completeError) {
-        // v1.1：仅重试 1 次，不搞递增延迟、不上报监控
+        // v1.1：仅重试 1 次，重试前短暂延迟
         try {
+          await new Promise(resolve => setTimeout(resolve, 1000))
           await tosApi.complete({
-            key: extractKeyFromUrl(presignResult.uploadUrl),
-            projectId: options.projectId,
-            fileType: options.fileType,
-            metadata: { originalName: file.name, size: file.size }
-          })
+            fileKey: presignResult.fileKey,
+            businessId: options.projectId,
+            fileSize: file.size,
+            originalName: file.name
+          } as TosCompleteRequest)
         } catch (e2) {
           ElMessage.error('文件已上传，但记录保存失败，请刷新后重试')
           throw e2
         }
       }
 
-      options.onSuccess?.(presignResult.accessUrl)
+      options.onSuccess?.(presignResult.accessUrl, presignResult.fileKey)
       return presignResult.accessUrl
     } catch (error: any) {
-      // 预签名过期 → 触发 retry-presign action
-      // v1.1：拦截器中已静默处理，此处不显示 Toast（老克 5.2）
-      // useTosUpload 负责递归重试一次
-      if (error.code === 40005 || error.response?.data?.code === 40005) {
-        return upload(file, options)
+      // 预签名过期 → 自动重试，避免无限递归
+      if ((error.code === 40005 || error.response?.data?.code === 40005) && retryCount < MAX_RETRY) {
+        return upload(file, options, retryCount + 1)
       }
       options.onError?.(error)
       throw error
@@ -2001,38 +2045,60 @@ export function useTosUpload() {
     }
   }
 
-  async function uploadToTos(url: string, file: File): Promise<void> {
+  async function uploadToTos(url: string, file: File, contentType: string, onProgress?: (percent: number) => void): Promise<void> {
     return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest()
+      xhr = new XMLHttpRequest()
       xhr.open('PUT', url)
-      xhr.setRequestHeader('Content-Type', file.type)
+      xhr.setRequestHeader('Content-Type', contentType)
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
           progress.value = Math.round((e.loaded / e.total) * 100)
+          onProgress?.(progress.value)
         }
       }
 
       xhr.onload = () => {
-        if (xhr.status >= 200 && xhr.status < 300) {
+        if (xhr && xhr.status >= 200 && xhr.status < 300) {
           resolve()
         } else {
-          reject(new Error(`TOS upload failed: ${xhr.status}`))
+          reject(new Error(`TOS upload failed: ${xhr?.status}`))
         }
+        xhr = null
       }
 
-      xhr.onerror = () => reject(new Error('TOS upload network error'))
+      xhr.onerror = () => {
+        reject(new Error('TOS upload network error. 请检查 TOS Bucket CORS 是否允许当前前端域名、PUT 方法和 Content-Type 请求头'))
+        xhr = null
+      }
       xhr.send(file)
     })
   }
 
-  // v1.1：增加 decodeURIComponent 处理（阿典 2.2）
-  function extractKeyFromUrl(url: string): string {
-    const urlObj = new URL(url)
-    return decodeURIComponent(urlObj.pathname.substring(1))
+  function getContentType(file: File): string {
+    if (file.type) return file.type
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const fallbackTypes: Record<string, string> = {
+      md: 'text/markdown',
+      markdown: 'text/markdown',
+      txt: 'text/plain',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+
+    return ext ? fallbackTypes[ext] || '' : ''
   }
 
-  return { uploading, progress, upload }
+  function abort() {
+    if (xhr && xhr.readyState !== 4) {
+      xhr.abort()
+      xhr = null
+      uploading.value = false
+      progress.value = 0
+    }
+  }
+
+  return { uploading, progress, upload, abort }
 }
 ```
 
@@ -2273,6 +2339,7 @@ app.config.errorHandler = (err, instance, info) => {
 | XSS 防护 | Vue 3 自动转义，v-html 严格限制 |
 | CSRF | Sa-Token header 认证（`Authorization: Bearer ***`），不依赖 Cookie 认证 |
 | 文件上传 | 前端校验类型+大小 → TOS 预签名 URL 限制 contentType |
+| TOS CORS | Bucket 必须允许前端 Origin、`PUT/GET/HEAD` 方法、`Content-Type` 请求头；开发环境建议固定 Vite 端口 |
 | API Key | 前端不接触，所有 AI 调用由后端代理 |
 | 路由守卫 | 未登录自动重定向登录页 |
 | 敏感操作确认 | 删除、执行流程等二次确认弹窗 |
@@ -2358,38 +2425,38 @@ VITE_APP_TITLE=AI漫剧生产平台
 
 | # | 任务 | 交付物 | 状态 |
 |---|------|--------|------|
-| 1.1 | Vue 3 + Vite + TS 项目初始化 | package.json, vite.config.ts, tsconfig.json | `[ ]` |
-| 1.2 | Element Plus 集成 + 暗色主题 | styles/dark-theme.scss, 组件自动导入 | `[ ]` |
-| 1.3 | Vue Router 配置 + 路由守卫 | router/index.ts, guards.ts | `[ ]` |
-| 1.4 | Pinia 初始化 + auth store | stores/auth.ts | `[ ]` |
-| 1.5 | Axios 实例 + 拦截器 | api/index.ts + 类型定义 | `[ ]` |
-| 1.6 | TS 类型定义（全模块） | types/*.ts | `[ ]` |
-| 1.7 | 登录页面 | views/Login.vue | `[ ]` |
-| 1.8 | 基础 Layout（Header + Sidebar） | components/Layout/*.vue | `[ ]` |
-| 1.9 | 常量与工具函数 | constants/*.ts, utils/*.ts | `[ ]` |
+| 1.1 | Vue 3 + Vite + TS 项目初始化 | package.json, vite.config.ts, tsconfig.json | `[x]` |
+| 1.2 | Element Plus 集成 + 暗色主题 | styles/dark-theme.scss, 组件自动导入 | `[x]` |
+| 1.3 | Vue Router 配置 + 路由守卫 | router/index.ts, guards.ts | `[x]` |
+| 1.4 | Pinia 初始化 + auth store | stores/auth.ts | `[x]` |
+| 1.5 | Axios 实例 + 拦截器 | api/index.ts + 类型定义 | `[x]` |
+| 1.6 | TS 类型定义（全模块） | types/*.ts | `[~]` 已覆盖主要模块，随接口联调继续补齐 |
+| 1.7 | 登录页面 | views/Login.vue | `[x]` |
+| 1.8 | 基础 Layout（Header + Sidebar） | components/Layout/AppLayout.vue | `[x]` |
+| 1.9 | 常量与工具函数 | constants/*.ts, utils/*.ts | `[x]` |
 
 ### Sprint 2: 核心业务页面（Day 4-7）
 
 | # | 任务 | 交付物 | 状态 |
 |---|------|--------|------|
-| 2.1 | 项目列表页（CRUD + 分页） | views/ProjectList.vue, api/project.ts | `[ ]` |
-| 2.2 | 项目详情页（Tab 容器） | views/ProjectDetail.vue, stores/project.ts | `[ ]` |
-| 2.3 | 资产库页面（Tab 分组 + 卡片网格） | views/tabs/AssetLibrary.vue | `[ ]` |
-| 2.4 | 资产卡片 + 表单组件 | components/Asset/*.vue | `[ ]` |
-| 2.5 | TOS 直传 composable + ImageUploader | composables/useTosUpload.ts | `[ ]` |
-| 2.6 | Asset Store 完整实现 | stores/asset.ts | `[ ]` |
-| 2.7 | 分集/分场/分镜 API 层 | api/content.ts | `[ ]` |
-| 2.8 | Content Store 实现 | stores/content.ts | `[ ]` |
+| 2.1 | 项目列表页（CRUD + 分页） | views/ProjectList.vue, api/project.ts | `[~]` 列表/新建/删除已实现，编辑入口未暴露 |
+| 2.2 | 项目详情页（Tab 容器） | views/ProjectDetail.vue, stores/project.ts | `[~]` Tab 容器已实现，编辑弹窗和 store 同步待补 |
+| 2.3 | 资产库页面（Tab 分组 + 卡片网格） | views/tabs/AssetLibrary.vue | `[~]` 脚本逻辑已写，缺模板渲染 |
+| 2.4 | 资产卡片 + 表单组件 | components/Asset/*.vue | `[~]` AssetCard 存在，AssetForm 未实现 |
+| 2.5 | TOS 直传 composable + TosUpload | composables/useTosUpload.ts, components/Common/TosUpload.vue | `[x]` 已联调 MIME fallback 和 CORS 提示 |
+| 2.6 | Asset Store 完整实现 | stores/asset.ts | `[~]` 已有 store，页面尚未完整接入 |
+| 2.7 | 分集/分场/分镜 API 层 | api/content.ts | `[x]` |
+| 2.8 | Content Store 实现 | stores/content.ts | `[~]` 已有 store，分镜工作台尚未使用 |
 
 ### Sprint 3: 流程编辑器 + 分镜工作台（Day 8-12）
 
 | # | 任务 | 交付物 | 状态 |
 |---|------|--------|------|
-| 3.1 | 流程编辑器（SortableJS 拖拽） | views/tabs/WorkflowEditor.vue | `[ ]` |
+| 3.1 | 流程编辑器（SortableJS 拖拽） | views/tabs/WorkflowEditor.vue | `[~]` 页面有模拟版本，未接真实 API，未实现拖拽排序 |
 | 3.2 | 流程步骤卡片组件 | components/Workflow/*.vue | `[ ]` |
-| 3.3 | Workflow Store + 工作流轮询 composable | stores/workflow.ts + composables/useWorkflowPolling.ts | `[ ]` |
-| 3.4 | useTaskPolling composable（三档退避） | composables/useTaskPolling.ts | `[ ]` |
-| 3.5 | 分镜工作台（左右分栏 + **分页模式**） | views/tabs/ShotWorkbench.vue | `[ ]` |
+| 3.3 | Workflow Store + 工作流轮询 composable | stores/workflow.ts + composables/useWorkflowPolling.ts | `[x]` store/composable 已存在，页面待接入 |
+| 3.4 | useTaskPolling composable（三档退避） | composables/useTaskPolling.ts | `[x]` |
+| 3.5 | 分镜工作台（左右分栏 + **分页模式**） | views/tabs/ShotWorkbench.vue | `[ ]` 当前为占位页 |
 | 3.6 | 分镜卡片 + 预览组件（排队文字提示） | components/Shot/*.vue | `[ ]` |
 | 3.7 | 资产绑定面板 | components/Shot/AssetBindPanel.vue | `[ ]` |
 | 3.8 | 批量审核功能 | ShotWorkbench 内实现 | `[ ]` |
@@ -2399,11 +2466,43 @@ VITE_APP_TITLE=AI漫剧生产平台
 
 | # | 任务 | 交付物 | 状态 |
 |---|------|--------|------|
-| 4.1 | API 消耗看板 | views/tabs/ApiCost.vue, api/ai.ts | `[ ]` |
+| 4.1 | API 消耗看板 | views/tabs/ApiCost.vue, api/ai.ts | `[~]` 页面为静态假数据，接口未接入 |
 | 4.2 | 全流程联调（导入→资产→流程→分镜→生成→导出） | 端到端测试 | `[ ]` |
 | 4.3 | 边界情况测试（断点续跑前端展示、并发锁提示、重试） | 测试报告 | `[ ]` |
-| 4.4 | 响应式适配（移动端 / 平板） | CSS 适配 | `[ ]` |
+| 4.4 | 响应式适配（移动端 / 平板） | CSS 适配 | `[~]` 部分页面使用响应式栅格，未系统验收 |
 | 4.5 | 性能验证（分页加载、el-image lazy、preload="none"） | 性能报告 | `[ ]` |
+
+---
+
+## 16. v1.4 当前剩余功能缺口
+
+> 状态来源：按 2026-04-22 当前前端代码检查结果整理。`[P0]` 为影响主流程闭环的必做项，`[P1]` 为影响体验或联调完整性的功能项，`[P2]` 为优化项。
+
+| 优先级 | 模块 | 缺口 | 影响 |
+|--------|------|------|------|
+| P0 | 资产库 | `AssetLibrary.vue` 缺少 `<template>`，资产列表、筛选、搜索、新建/编辑/删除弹窗无法展示 | 资产管理主功能不可用 |
+| P0 | 工作流 | `WorkflowEditor.vue` 仍是本地模拟执行，未调用保存/启动/停止/状态查询接口 | 无法触发真实流程 |
+| P0 | 分镜工作台 | `ShotWorkbench.vue` 仍是占位页 | 分镜审核、生成、批量操作主流程不可用 |
+| P0 | 项目详情 | 编辑项目按钮仅提示「开发中」 | 项目详情页无法编辑项目 |
+| P1 | 资产表单 | `AssetForm.vue` 未实现，资产创建/编辑表单未组件化 | 资产库补模板时需要同步补齐 |
+| P1 | 分镜组件 | `components/Shot/*` 未实现 | 分镜列表、预览、审核弹窗、资产绑定缺少组件基础 |
+| P1 | 工作流组件 | `components/Workflow/*` 未实现，流程步骤卡片未组件化 | 工作流页面后续接真实状态时复用性不足 |
+| P1 | API 成本 | `ApiCost.vue` 使用硬编码数据，未接 `aiApi.getCostReport` | 成本看板只能展示假数据 |
+| P1 | Tab 同步 | `ProjectDetail.vue` 的 `activeTab` 未 watch `route.name` | 侧边栏跳转/浏览器前进后退可能高亮不同步 |
+| P1 | Store 接入 | 项目详情、资产库、工作流页面对 Pinia store 使用不统一 | 状态复用和跨 Tab 刷新能力弱 |
+| P1 | TOS 运维 | TOS Bucket CORS 依赖外部配置，前端只能提示不能代配 | 新环境联调前需先配置 Bucket |
+| P2 | 样式 | `@import` 触发 Sass 废弃警告 | 当前不阻断构建，后续 Sass 大版本升级需迁移 |
+| P2 | 构建体积 | 主 chunk 超过 500KB 警告 | 后续可用 manualChunks 拆 Element Plus/viog-ui/TOS SDK |
+| P2 | 测试 | 缺少自动化单测/E2E 验证 | 回归依赖手工测试 |
+
+**粗略完成度判断：**
+- 工程骨架、登录鉴权、API 层、类型层、基础样式、TOS 上传：约 80% 完成。
+- 项目管理：约 70% 完成，缺详情页编辑与少量状态同步。
+- 资产管理：约 35% 完成，脚本/API 有基础，页面模板和表单还缺。
+- 工作流：约 40% 完成，store/轮询/API 已有，页面仍是模拟逻辑。
+- 分镜工作台：约 10% 完成，当前只有占位页和 API/store 基础。
+- API 成本看板：约 20% 完成，当前为静态 UI。
+- 全流程可用性：约 45% 完成，距离 MVP 闭环主要差资产库页面、真实工作流、分镜工作台三块。
 
 ---
 
@@ -2500,6 +2599,6 @@ VITE_APP_TITLE=AI漫剧生产平台
 
 ---
 
-*文档版本: v1.1 | 作者: 小欧 | 日期: 2026-04-19*
-*评审状态: 评审通过（基于老克 + 阿典 评审意见修订）*
-*变更记录: 详见 `REPLY_小欧_REVIEWS.md` 和 附录 C*
+*文档版本: v1.4 | 作者: 小欧 | 日期: 2026-04-22*
+*当前状态: 开发中（已按当前前端代码与 TOS 联调结果修订）*
+*变更记录: 详见 v1.4 变更说明、附录 C 与第 16 节剩余功能缺口*

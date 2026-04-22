@@ -11,9 +11,9 @@ import 'element-plus/theme-chalk/dark/css-vars.css' // Element Plus 暗色主题
 import VioGUI from 'viog-ui'
 import 'viog-ui/dist/viog-ui.css'
 
+import './styles/index.scss' // 全局样式（变量 → 重置 → 暗色主题）放在最后，确保覆盖UI库默认样式
 import App from './App.vue'
 import router from './router'
-import './styles/index.scss' // 全局样式（变量 → 重置 → 暗色主题）
 
 const app = createApp(App)
 

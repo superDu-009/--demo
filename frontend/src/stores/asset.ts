@@ -3,7 +3,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { assetApi } from '@/api/asset'
-import type { AssetVO, AssetType } from '@/types'
+import type { AssetVO, AssetType, PageResult } from '@/types'
 
 export const useAssetStore = defineStore('asset', () => {
   const assetsByType = ref<Record<AssetType, AssetVO[]>>({
@@ -17,15 +17,17 @@ export const useAssetStore = defineStore('asset', () => {
   async function fetchAssets(projectId: number, assetType?: AssetType) {
     loading.value = true
     try {
-      const res = await assetApi.list(projectId, assetType)
+      const res = await assetApi.list(projectId, { type: assetType })
+      const pageData = res.data as PageResult<AssetVO>
+      const list = pageData.records || pageData.list
       if (assetType) {
-        assetsByType.value[assetType] = res.data
+        assetsByType.value[assetType] = list
       } else {
         // 按类型分组
         const grouped: Record<AssetType, AssetVO[]> = {
           character: [], scene: [], prop: [], voice: []
         }
-        res.data.forEach(asset => {
+        list.forEach(asset => {
           if (grouped[asset.assetType]) {
             grouped[asset.assetType].push(asset)
           }

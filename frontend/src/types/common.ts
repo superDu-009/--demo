@@ -15,6 +15,7 @@ export interface PageResult<T = any> {
   size: number
   hasNext: boolean
   list: T[]
+  records?: T[] // 兼容后端返回字段名
 }
 
 // 项目状态枚举

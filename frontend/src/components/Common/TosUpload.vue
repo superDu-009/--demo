@@ -105,7 +105,7 @@ const { uploading, progress, upload } = useTosUpload()
 
 // 计算属性
 const acceptStr = computed(() => {
-  return props.allowedTypes.join(',')
+  return props.accept && props.accept !== '*' ? props.accept : props.allowedTypes.join(',')
 })
 
 // 监听外部传入的modelValue变化

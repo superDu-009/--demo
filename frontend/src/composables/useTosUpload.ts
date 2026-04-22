@@ -32,10 +32,11 @@ export function useTosUpload() {
       throw new Error('File too large')
     }
 
-    // 2. 校验文件类型：双重校验（file.type + 文件头魔数）
+    // 2. 校验文件类型：双重校验（file.type + 文件头魔数 + 后缀名兼容）
     const allowedTypes = options.allowedTypes || ['image/png', 'image/jpeg', 'video/mp4', 'text/plain', 'text/markdown']
-    if (!allowedTypes.includes(file.type)) {
-      ElMessage.error(`不支持的文件类型: ${file.type}`)
+    const contentType = getContentType(file)
+    if (!contentType || !allowedTypes.includes(contentType)) {
+      ElMessage.error(`不支持的文件类型: ${file.type || file.name.split('.').pop()}`)
       throw new Error('Unsupported file type')
     }
     // 文件头魔数校验，防止篡改后缀绕过
@@ -52,14 +53,14 @@ export function useTosUpload() {
       // 3. 获取预签名 URL
       const presignRes = await tosApi.presign({
         fileName: file.name,
-        contentType: file.type,
+        contentType,
         source: 'frontend',
         businessId: options.projectId
       })
       const presignResult = presignRes.data
 
       // 4. 直传 TOS
-      await uploadToTos(presignResult.uploadUrl, file)
+      await uploadToTos(presignResult.uploadUrl, file, contentType, options.onProgress)
 
       // 5. 通知后端上传完成（v1.1：complete 失败仅重试 1 次）
       try {
@@ -102,21 +103,21 @@ export function useTosUpload() {
   }
 
   // XHR 直传 TOS（支持进度回调）
-  async function uploadToTos(url: string, file: File): Promise<void> {
+  async function uploadToTos(url: string, file: File, contentType: string, onProgress?: (percent: number) => void): Promise<void> {
     return new Promise((resolve, reject) => {
       xhr = new XMLHttpRequest()
       xhr.open('PUT', url)
-      xhr.setRequestHeader('Content-Type', file.type)
+      xhr.setRequestHeader('Content-Type', contentType)
 
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
           progress.value = Math.round((e.loaded / e.total) * 100)
-          options?.onProgress?.(progress.value)
+          onProgress?.(progress.value)
         }
       }
 
       xhr.onload = () => {
-        if (xhr?.status >= 200 && xhr.status < 300) {
+        if (xhr && xhr.status >= 200 && xhr.status < 300) {
           resolve()
         } else {
           reject(new Error(`TOS upload failed: ${xhr?.status}`))
@@ -125,7 +126,7 @@ export function useTosUpload() {
       }
 
       xhr.onerror = () => {
-        reject(new Error('TOS upload network error'))
+        reject(new Error('TOS upload network error. 请检查 TOS Bucket CORS 是否允许当前前端域名、PUT 方法和 Content-Type 请求头'))
         xhr = null
       }
       xhr.send(file)
@@ -139,6 +140,20 @@ export function useTosUpload() {
     'video/mp4': ['0000001866747970', '0000002066747970'],
     'text/plain': ['EFBBBF', 'FFFE', 'FEFF'], // UTF-8/UTF-16 BOM，无BOM纯文本后续补充逻辑
     'text/markdown': ['EFBBBF', 'FFFE', 'FEFF']
+  }
+
+  function getContentType(file: File): string {
+    if (file.type) return file.type
+
+    const ext = file.name.split('.').pop()?.toLowerCase()
+    const fallbackTypes: Record<string, string> = {
+      md: 'text/markdown',
+      markdown: 'text/markdown',
+      txt: 'text/plain',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    }
+
+    return ext ? fallbackTypes[ext] || '' : ''
   }
 
   // 校验文件真实类型（读取文件头魔数）

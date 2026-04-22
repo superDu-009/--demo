@@ -73,13 +73,13 @@ const typeLabel = computed(() => {
 
 // 标签类型
 const tagType = computed(() => {
-  const map: Record<string, string> = {
-    character: '',
+  const map: Record<string, 'primary' | 'success' | 'warning' | 'info'> = {
+    character: 'primary',
     scene: 'success',
     prop: 'warning',
     voice: 'info'
   }
-  return map[props.asset.assetType] || ''
+  return map[props.asset.assetType] || 'primary'
 })
 </script>
 

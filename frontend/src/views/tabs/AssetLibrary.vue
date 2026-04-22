@@ -4,7 +4,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
 import { assetApi } from '@/api/asset'
-import type { AssetVO, AssetCreateRequest, AssetUpdateRequest } from '@/types'
+import type { AssetVO, AssetCreateRequest, AssetUpdateRequest, PageResult } from '@/types'
 
 const route = useRoute()
 
@@ -55,8 +55,9 @@ const fetchAssetList = async () => {
     }
     const res = await assetApi.list(projectId.value, params)
     if (res.code === 0) {
-      assetList.value = res.data.records
-      total.value = res.data.total
+      const pageData = res.data as PageResult<AssetVO>
+      assetList.value = pageData.records || pageData.list
+      total.value = pageData.total
     }
   } catch (err) {
     ElMessage.error('获取资产列表失败')
@@ -97,7 +98,7 @@ const handleFormSubmit = async (formData: any) => {
   try {
     if (isEdit.value && currentEditAsset.value) {
       // 编辑资产
-      await assetApi.update(projectId.value, currentEditAsset.value.id, formData)
+      await assetApi.update(currentEditAsset.value.id, formData)
       ElMessage.success('编辑成功')
     } else {
       // 新建资产
@@ -119,7 +120,7 @@ const handleDelete = async (asset: AssetVO) => {
   deleteWarning.value = ''
   try {
     // 检查资产引用
-    const res = await assetApi.checkReferences(projectId.value, asset.id)
+    const res = await assetApi.checkReferences(asset.id)
     if (res.data && res.data.count > 0) {
       deleteWarning.value = `该资产已被 ${res.data.count} 个分镜引用，删除后会影响分镜生成！`
     }
@@ -134,7 +135,7 @@ const confirmDelete = async () => {
   if (!currentDeleteAsset.value || !projectId.value) return
   deleteLoading.value = true
   try {
-    await assetApi.delete(projectId.value, currentDeleteAsset.value.id)
+    await assetApi.delete(currentDeleteAsset.value.id)
     ElMessage.success('删除成功')
     deleteDialogVisible.value = false
     fetchAssetList()
@@ -153,7 +154,7 @@ const confirmDelete = async () => {
 const handleConfirm = async (asset: AssetVO) => {
   if (!projectId.value) return
   try {
-    await assetApi.confirm(projectId.value, asset.id)
+    await assetApi.confirm(asset.id)
     ElMessage.success('资产已确认')
     fetchAssetList()
   } catch (err) {

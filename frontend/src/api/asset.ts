@@ -5,9 +5,9 @@ import type { AssetCreateRequest, AssetUpdateRequest, AssetVO, ShotReferenceVO, 
 
 export const assetApi = {
   // 获取项目资产列表：GET /api/project/{projectId}/assets
-  list: (projectId: number, assetType?: string) =>
-    request.get<never, ApiResponse<AssetVO[]>>(`/project/${projectId}/assets`, {
-      params: assetType ? { assetType } : undefined
+  list: (projectId: number, params?: { type?: string; keyword?: string; page?: number; size?: number }) =>
+    request.get<never, ApiResponse<PageResult<AssetVO>>>(`/project/${projectId}/assets`, {
+      params: params || undefined
     }),
 
   // 创建资产：POST /api/project/{projectId}/assets
@@ -16,7 +16,7 @@ export const assetApi = {
 
   // 更新资产：PUT /api/asset/{id}
   update: (id: number, data: AssetUpdateRequest) =>
-    request.put(`/asset/${id}`, data),
+    request.put<number, ApiResponse<number>>(`/asset/${id}`, data),
 
   // 删除资产：DELETE /api/asset/{id}
   delete: (id: number) =>
@@ -26,7 +26,11 @@ export const assetApi = {
   confirm: (id: number) =>
     request.put(`/asset/${id}/confirm`),
 
-  // 获取资产引用（删除前检查）：GET /api/asset/{assetId}/references
+  // 检查资产引用（删除前检查）：GET /api/asset/{assetId}/references
+  checkReferences: (assetId: number) =>
+    request.get<never, ApiResponse<{ count: number }>>(`/asset/${assetId}/references/check`),
+
+  // 获取资产引用（详细列表）：GET /api/asset/{assetId}/references
   getReferences: (assetId: number, params?: { page?: number; size?: number }) =>
     request.get<never, ApiResponse<PageResult<ShotReferenceVO>>>(`/asset/${assetId}/references`, { params })
 }

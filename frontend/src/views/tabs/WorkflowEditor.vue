@@ -23,7 +23,7 @@
         <h4>执行进度</h4>
         <span class="progress-text">{{ overallProgress }}%</span>
       </div>
-      <el-progress :percentage="overallProgress" :show-text="false" stroke-width="12" />
+      <el-progress :percentage="overallProgress" :show-text="false" :stroke-width="12" />
       <p class="progress-desc">{{ currentStepDesc }}</p>
     </div>
 
@@ -85,8 +85,8 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { 
-  Upload, Search, Edit, Picture, Video, Folder, Rank, Check, Close
+import {
+  Upload, Search, Edit, Picture, Film, Folder, Rank, Check, Close
 } from '@element-plus/icons-vue'
 
 // 工作流步骤数据
@@ -151,7 +151,7 @@ const workflowSteps = reactive([
     id: 5,
     name: '视频生成',
     description: '根据分镜图片生成连贯的动画视频',
-    icon: Video,
+    icon: Film,
     enabled: true,
     configurable: true,
     needReview: true,

@@ -118,8 +118,8 @@ html, body, #app {
   @extend .btn-gradient;
 }
 
-// 弹窗
-:deep(.el-dialog) {
+// 弹窗（全局样式不需要:deep()，优先级更高）
+.el-dialog {
   background: rgba(22, 24, 38, 0.95) !important;
   backdrop-filter: blur(12px) !important;
   border: 1px solid rgba(100, 108, 255, 0.2) !important;
@@ -156,61 +156,62 @@ html, body, #app {
 }
 
 // 表单元素
-:deep(.el-form-item__label) {
+.el-form-item__label {
   color: $text-primary;
   font-weight: 500;
   margin-bottom: 8px;
 }
 
-:deep(.el-input__wrapper) {
+.el-input__wrapper {
   height: 44px;
-  background: rgba(22, 24, 38, 0.7);
-  border: 1px solid rgba(100, 108, 255, 0.2);
-  backdrop-filter: blur(8px);
-  border-radius: 8px;
-  box-shadow: none;
-  transition: all 0.3s ease;
+  background: rgba(22, 24, 38, 0.7) !important;
+  border: 1px solid rgba(100, 108, 255, 0.2) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+  transition: all 0.3s ease !important;
 
   &:hover {
-    border-color: $border-glow-color;
+    border-color: $border-glow-color !important;
   }
 
   &.is-focus {
-    border-color: $border-glow-color;
-    box-shadow: 0 0 12px rgba(100, 108, 255, 0.2);
+    border-color: $border-glow-color !important;
+    box-shadow: 0 0 12px rgba(100, 108, 255, 0.2) !important;
   }
 
   .el-input__inner {
-    color: $text-primary;
+    color: $text-primary !important;
+    background: transparent !important;
     &::placeholder {
-      color: $text-tertiary;
+      color: $text-tertiary !important;
     }
   }
 }
 
-:deep(.el-textarea__inner) {
-  background: rgba(22, 24, 38, 0.7);
-  border: 1px solid rgba(100, 108, 255, 0.2);
-  backdrop-filter: blur(8px);
-  border-radius: 8px;
-  color: $text-primary;
-  transition: all 0.3s ease;
+.el-textarea__inner {
+  background: rgba(22, 24, 38, 0.7) !important;
+  border: 1px solid rgba(100, 108, 255, 0.2) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 8px !important;
+  color: $text-primary !important;
+  transition: all 0.3s ease !important;
 
   &:hover {
-    border-color: $border-glow-color;
+    border-color: $border-glow-color !important;
   }
 
   &:focus {
-    border-color: $border-glow-color;
-    box-shadow: 0 0 12px rgba(100, 108, 255, 0.2);
+    border-color: $border-glow-color !important;
+    box-shadow: 0 0 12px rgba(100, 108, 255, 0.2) !important;
   }
 
   &::placeholder {
-    color: $text-tertiary;
+    color: $text-tertiary !important;
   }
 }
 
-:deep(.el-select) {
+.el-select {
   .el-input__wrapper {
     height: 44px;
   }
@@ -219,20 +220,20 @@ html, body, #app {
   }
 }
 
-:deep(.el-select-dropdown) {
-  background: rgba(22, 24, 38, 0.98);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(100, 108, 255, 0.2);
-  border-radius: 8px;
+.el-select-dropdown {
+  background: rgba(22, 24, 38, 0.98) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(100, 108, 255, 0.2) !important;
+  border-radius: 8px !important;
   .el-select-dropdown__item {
-    color: $text-primary;
+    color: $text-primary !important;
     &.is-selected {
-      background: rgba(100, 108, 255, 0.2);
-      color: $primary-color;
-      font-weight: 500;
+      background: rgba(100, 108, 255, 0.2) !important;
+      color: $primary-color !important;
+      font-weight: 500 !important;
     }
     &:hover {
-      background: rgba(100, 108, 255, 0.1);
+      background: rgba(100, 108, 255, 0.1) !important;
     }
   }
   .el-select-dropdown__empty {
@@ -240,7 +241,7 @@ html, body, #app {
   }
 }
 
-:deep(.el-radio) {
+.el-radio {
   .el-radio__input.is-checked .el-radio__inner {
     background: $primary-gradient;
     border-color: $border-glow-color;
@@ -250,7 +251,7 @@ html, body, #app {
   }
 }
 
-:deep(.el-checkbox) {
+.el-checkbox {
   .el-checkbox__input.is-checked .el-checkbox__inner {
     background: $primary-gradient;
     border-color: $border-glow-color;
@@ -261,7 +262,7 @@ html, body, #app {
 }
 
 // 标签
-:deep(.el-tag) {
+.el-tag {
   border-radius: 20px;
   backdrop-filter: blur(8px);
   background: rgba(100, 108, 255, 0.1);
@@ -269,7 +270,7 @@ html, body, #app {
 }
 
 // 消息提示
-:deep(.el-message) {
+.el-message {
   background: rgba(22, 24, 38, 0.95);
   backdrop-filter: blur(12px);
   border: 1px solid rgba(100, 108, 255, 0.2);
@@ -280,7 +281,7 @@ html, body, #app {
 }
 
 // 加载
-:deep(.el-loading-mask) {
+.el-loading-mask {
   background: rgba(10, 10, 18, 0.7);
   backdrop-filter: blur(4px);
   .el-loading-spinner .path {
@@ -292,14 +293,14 @@ html, body, #app {
 }
 
 // 空状态
-:deep(.el-empty) {
+.el-empty {
   .el-empty__description {
     color: $text-secondary;
   }
 }
 
 // 分页
-:deep(.el-pagination) {
+.el-pagination {
   .el-pager li {
     background: rgba(22, 24, 38, 0.7);
     border: 1px solid rgba(100, 108, 255, 0.2);
@@ -328,4 +329,30 @@ html, body, #app {
   .el-pagination__jump .el-input__wrapper {
     background: rgba(22, 24, 38, 0.7);
   }
+  // 页数选择下拉框背景适配
+  .el-pagination__sizes .el-input__wrapper {
+    background: rgba(22, 24, 38, 0.7) !important;
+    border-color: rgba(100, 108, 255, 0.2) !important;
+  }
+}
+
+// 输入框字符计数彻底解决白色背景
+.el-input__count,
+.el-textarea__count,
+.el-input__count-inner,
+.el-textarea__count-inner {
+  color: $text-tertiary !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+.el-pagination .el-select__wrapper,
+.el-select__wrapper {
+  background: rgba(22, 24, 38, 0.7) !important;
+  background-color: rgba(22, 24, 38, 0.7) !important;
+  border: 1px solid rgba(100, 108, 255, 0.2) !important;
+  box-shadow: none !important;
+  color: $text-primary !important;
 }

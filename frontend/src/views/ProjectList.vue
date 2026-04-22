@@ -30,11 +30,22 @@
       <el-row :gutter="16">
         <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="project in projectList" :key="project.id">
           <el-card class="project-card card-glass border-neon" @click="goToDetail(project.id)">
-            <!-- 项目封面 -->
+             <!-- 项目封面 -->
             <div class="project-cover">
               <img :src="getProjectCover(project.id)" alt="项目封面" class="cover-img">
               <div class="cover-overlay">
                 <span class="status-tag">{{ project.status === 0 ? '草稿' : project.status === 1 ? '进行中' : '已完成' }}</span>
+                <!-- 右上角删除按钮 -->
+                <el-button
+                  class="delete-btn"
+                  type="danger"
+                  size="small"
+                  circle
+                  @click.stop="handleDelete(project)"
+                  :disabled="project.executionLock === 1"
+                >
+                  <el-icon><Delete /></el-icon>
+                </el-button>
               </div>
             </div>
             
@@ -45,33 +56,16 @@
               <div class="project-desc" :title="project.description || '暂无描述'">
                 {{ project.description || '暂无描述' }}
               </div>
-              <div class="project-meta">
-                <span class="meta-item">
-                  <el-icon><Calendar /></el-icon>
-                  {{ formatDate(project.createTime) }}
-                </span>
-                <span class="meta-item" v-if="project.executionLock">
-                  <el-icon><Lock /></el-icon>
-                  执行中
-                </span>
-              </div>
-              <div class="card-actions">
-                <el-button
-                  size="small"
-                  @click.stop="openEditDialog(project)"
-                  :disabled="project.status !== 0"
-                >
-                  编辑
-                </el-button>
-                <el-button
-                  size="small"
-                  type="danger"
-                  @click.stop="handleDelete(project)"
-                  :disabled="project.executionLock === 1"
-                >
-                  删除
-                </el-button>
-              </div>
+               <div class="project-meta">
+                 <span class="meta-item">
+                   <el-icon><Calendar /></el-icon>
+                   {{ formatDate(project.createTime) }}
+                 </span>
+                 <span class="meta-item" v-if="project.executionLock">
+                   <el-icon><Lock /></el-icon>
+                   执行中
+                 </span>
+               </div>
             </div>
           </el-card>
         </el-col>
@@ -123,8 +117,9 @@
             :project-id="0"
             file-type="other"
             button-text="上传小说文件"
-            tip-text="支持txt/docx格式，最大10MB"
-            :allowed-types="['text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']"
+            tip-text="支持txt/docx/md格式，最大10MB"
+            accept=".txt,.docx,.md"
+            :allowed-types="['text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/markdown', 'text/x-markdown', 'application/markdown']"
             :max-file-size="10 * 1024 * 1024"
             @success="handleNovelUploadSuccess"
           />
@@ -154,7 +149,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Plus, Search, Calendar, Lock } from '@element-plus/icons-vue'
+import { Plus, Search, Calendar, Lock, Delete } from '@element-plus/icons-vue'
 import { ElMessage, ElForm } from 'element-plus'
 import dayjs from 'dayjs'
 import { projectApi } from '@/api/project'
@@ -247,10 +242,8 @@ const openEditDialog = (project: ProjectVO) => {
 }
 
 // 小说上传成功处理
-const handleNovelUploadSuccess = (keys: string[]) => {
-  if (keys.length > 0) {
-    formData.novelTosPath = keys[0]
-  }
+const handleNovelUploadSuccess = (url: string) => {
+  formData.novelTosPath = url
 }
 
 // 提交表单
@@ -389,35 +382,54 @@ onMounted(() => {
       transition: transform 0.5s ease;
     }
 
-    .cover-overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(10,10,18,0.8));
-      display: flex;
-      align-items: flex-end;
-      justify-content: flex-end;
-      padding: 12px;
+     .cover-overlay {
+       position: absolute;
+       top: 0;
+       left: 0;
+       right: 0;
+       bottom: 0;
+       background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(10,10,18,0.8));
+       display: flex;
+       align-items: flex-start;
+       justify-content: space-between;
+       padding: 12px;
 
-      .status-tag {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 12px;
-        color: #fff;
-        backdrop-filter: blur(8px);
-        &:contains('草稿') {
-          background: rgba(144, 147, 153, 0.8);
-        }
-        &:contains('进行中') {
-          background: rgba(64, 158, 255, 0.8);
-        }
-        &:contains('已完成') {
-          background: rgba(103, 194, 58, 0.8);
-        }
-      }
-    }
+       .status-tag {
+         padding: 4px 10px;
+         border-radius: 20px;
+         font-size: 12px;
+         color: #fff;
+         backdrop-filter: blur(8px);
+         margin-top: auto;
+         &:contains('草稿') {
+           background: rgba(144, 147, 153, 0.8);
+         }
+         &:contains('进行中') {
+           background: rgba(64, 158, 255, 0.8);
+         }
+         &:contains('已完成') {
+           background: rgba(103, 194, 58, 0.8);
+         }
+       }
+
+       .delete-btn {
+         background: rgba(245, 108, 108, 0.9);
+         border: none;
+         opacity: 0.8;
+         transition: all 0.2s ease;
+
+         &:hover {
+           opacity: 1;
+           transform: scale(1.1);
+           box-shadow: 0 0 12px rgba(245, 108, 108, 0.5);
+         }
+
+         &:disabled {
+           opacity: 0.3;
+           cursor: not-allowed;
+         }
+       }
+     }
   }
 
   &:hover .cover-img {
@@ -443,17 +455,17 @@ onMounted(() => {
     max-width: 100%;
   }
 
-  .project-desc {
-    height: 44px;
-    font-size: 13px;
-    color: $text-secondary;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    margin-bottom: 12px;
-  }
+   .project-desc {
+     height: 68px;
+     font-size: 13px;
+     color: $text-secondary;
+     overflow: hidden;
+     text-overflow: ellipsis;
+     display: -webkit-box;
+     -webkit-line-clamp: 3;
+     -webkit-box-orient: vertical;
+     margin-bottom: 12px;
+   }
 
   .project-meta {
     display: flex;

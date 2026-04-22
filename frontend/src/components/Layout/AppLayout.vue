@@ -11,7 +11,7 @@
             <el-tooltip 
               v-for="item in menuList" 
               :key="item.path"
-              :disabled="!item.disabled || item.name === 'ProjectList'"
+              :disabled="item.name === 'ProjectList' || !!$route.params.id"
               content="请先选择一个项目进入详情页"
               placement="right"
             >
@@ -350,9 +350,28 @@ const handleLogout = async () => {
 
 .app-main {
   padding: $page-padding;
+  padding-bottom: 4px; /* 大幅减小底部padding，让分页离底边更近 */
   background-color: $bg-page;
   overflow-y: auto;
   flex: 1;
+  box-sizing: border-box;
+  height: calc(100vh - 64px);
+  /* 隐藏滚动条但保留滚动功能 */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100, 108, 255, 0.5) transparent;
+}
+.app-main::-webkit-scrollbar {
+  width: 6px;
+}
+.app-main::-webkit-scrollbar-track {
+  background: transparent;
+}
+.app-main::-webkit-scrollbar-thumb {
+  background: rgba(100, 108, 255, 0.5);
+  border-radius: 3px;
+}
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 108, 255, 0.7);
 }
 
 // 脉冲动画

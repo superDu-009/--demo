@@ -1,148 +1,365 @@
 // styles/dark-theme.scss — 系分第 10 节：Element Plus 暗色主题定制
 // 通过 CSS 变量覆盖 Element Plus 默认样式，统一暗色主题
 
-// Element Plus 暗色主题 CSS 变量覆盖
+/* 最高优先级全局强制暗色样式，彻底解决白色背景问题 */
+* {
+  --el-input-bg-color: #{$bg-card} !important;
+  --el-fill-color: #{$bg-card} !important;
+  --el-bg-color: #{$bg-card} !important;
+  --el-fill-color-light: #{$bg-card} !important;
+}
+
+/* 强制分页组件高度变小，离底边更近 */
+.el-pagination {
+  margin: 0 0 -8px 0 !important;
+  padding: 0 !important;
+  min-height: 28px !important;
+  
+  .el-pager li,
+  .el-pagination__btn-prev,
+  .el-pagination__btn-next {
+    height: 28px !important;
+    line-height: 28px !important;
+    min-width: 28px !important;
+    font-size: 12px !important;
+  }
+  
+  .el-input__wrapper {
+    height: 26px !important;
+    min-height: 26px !important;
+  }
+  
+  .el-pagination__total,
+  .el-pagination__jump {
+    font-size: 12px !important;
+    line-height: 28px !important;
+  }
+}
+
+// Element Plus 暗色主题 CSS 变量覆盖（最高优先级）
 html.dark,
 :root {
   // 页面背景
-  --el-bg-color: #{$bg-page};
+  --el-bg-color: #{$bg-page} !important;
   // 页面内容背景
-  --el-bg-color-page: #{$bg-page};
+  --el-bg-color-page: #{$bg-page} !important;
   // 弹出层/卡片背景
-  --el-bg-color-overlay: #{$bg-card};
+  --el-bg-color-overlay: #{$bg-card} !important;
   // 边框颜色
-  --el-border-color: #{$border-color};
-  --el-border-color-light: #{$border-color};
-  --el-border-color-lighter: #{$border-color};
+  --el-border-color: #{$border-color} !important;
+  --el-border-color-light: #{$border-color} !important;
+  --el-border-color-lighter: #{$border-color} !important;
   // 文字颜色
-  --el-text-color-primary: #{$text-primary};
-  --el-text-color-regular: #{$text-secondary};
-  --el-text-color-secondary: #{$text-disabled};
+  --el-text-color-primary: #{$text-primary} !important;
+  --el-text-color-regular: #{$text-secondary} !important;
+  --el-text-color-secondary: #{$text-disabled} !important;
   // 填充色
-  --el-fill-color: #{$bg-card};
-  --el-fill-color-light: #{$bg-card};
+  --el-fill-color: #{$bg-card} !important;
+  --el-fill-color-light: #{$bg-card} !important;
+  // 输入框背景
+  --el-input-bg-color: #{$bg-card} !important;
+  // 选择器背景
+  --el-select-dropdown-bg-color: #{$bg-card} !important;
+  // 分页背景
+  --el-pagination-bg-color: #{$bg-card} !important;
+  // 按钮背景
+  --el-button-bg-color: #{$bg-card} !important;
 }
 
-// Element Plus 组件暗色适配
+// viog-ui 暗色主题适配
+:root {
+  --vio-bg: #{$bg-page} !important;
+  --vio-bg-card: #{$bg-card} !important;
+  --vio-border: #{$border-color} !important;
+  --vio-primary: #{$primary-color} !important;
+  --vio-text-primary: #{$text-primary} !important;
+  --vio-text-secondary: #{$text-secondary} !important;
+  --vio-text-disabled: #{$text-disabled} !important;
+}
+
+.vio-select-dropdown {
+  background: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
+  color: #{$text-secondary} !important;
+}
+
+.vio-select-item {
+  color: #{$text-secondary} !important;
+  background: transparent !important;
+
+  &:hover {
+    background: rgba(100, 108, 255, 0.1) !important;
+    color: #{$primary-color} !important;
+  }
+
+  &.selected {
+    background: rgba(100, 108, 255, 0.2) !important;
+    color: #{$primary-color} !important;
+  }
+}
+
+.vio-pagination {
+  background: #{$bg-card} !important;
+  color: #{$text-secondary} !important;
+
+  .vio-pagination-item {
+    background: #{$bg-card} !important;
+    border-color: #{$border-color} !important;
+    color: #{$text-secondary} !important;
+
+    &:hover {
+      border-color: #{$primary-color} !important;
+      color: #{$primary-color} !important;
+    }
+
+    &.active {
+      background: #{$primary-gradient} !important;
+      border-color: #{$primary-color} !important;
+            color: $text-primary !important;
+    }
+  }
+}
+
+.vio-input {
+  background: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
+  color: #{$text-primary} !important;
+
+  &:focus {
+    border-color: #{$primary-color} !important;
+  }
+}
+
+// Element Plus 组件暗色适配（最高优先级）
 .el-card {
-  --el-card-bg-color: #{$bg-card};
-  border-color: #{$border-color};
+  --el-card-bg-color: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
 }
 
 .el-table {
-  --el-table-bg-color: #{$bg-page};
-  --el-table-tr-bg-color: #{$bg-page};
-  --el-table-header-bg-color: #{$bg-card};
-  --el-table-border-color: #{$border-color};
-  background-color: #{$bg-page};
+  --el-table-bg-color: #{$bg-page} !important;
+  --el-table-tr-bg-color: #{$bg-page} !important;
+  --el-table-header-bg-color: #{$bg-card} !important;
+  --el-table-border-color: #{$border-color} !important;
+  background-color: #{$bg-page} !important;
 
   th.el-table__cell {
-    background-color: #{$bg-card};
+    background-color: #{$bg-card} !important;
   }
 }
 
 .el-dialog {
-  --el-dialog-bg-color: #{$bg-card};
+  --el-dialog-bg-color: #{$bg-card} !important;
 }
 
 .el-input__wrapper {
-  background-color: #{$bg-page};
-  box-shadow: 0 0 0 1px #{$border-color} inset;
+  background-color: #{$bg-card} !important;
+  box-shadow: 0 0 0 1px #{$border-color} inset !important;
 
   &.is-focus {
-    box-shadow: 0 0 0 1px #{$primary-color} inset;
+    box-shadow: 0 0 0 1px #{$primary-color} inset !important;
   }
 }
 
 .el-select-dropdown {
-  background-color: #{$bg-card};
-  border-color: #{$border-color};
+  background-color: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
 }
 
 .el-tabs__item {
-  color: #{$text-secondary};
+  color: #{$text-secondary} !important;
 
   &.is-active {
-    color: #{$primary-color};
+    color: #{$primary-color} !important;
   }
 
   &:hover {
-    color: #{$primary-color};
+    color: #{$primary-color} !important;
   }
 }
 
 // 表单 label 宽度统一
 .el-form-item__label {
-  width: #{$form-label-width};
+  width: #{$form-label-width} !important;
 }
 
-// 分页组件适配
+// 分页组件适配（最高优先级）
 .el-pagination {
-  --el-pagination-bg-color: #{$bg-card};
-  --el-pagination-text-color: #{$text-secondary};
-  --el-pagination-hover-color: #{$primary-color};
+  --el-pagination-bg-color: #{$bg-card} !important;
+  --el-pagination-text-color: #{$text-secondary} !important;
+  --el-pagination-hover-color: #{$primary-color} !important;
 
   .el-pager li {
-    background: #{$bg-card};
-    border: 1px solid #{$border-color};
-    color: #{$text-secondary};
+    background: #{$bg-card} !important;
+    border: 1px solid #{$border-color} !important;
+    color: #{$text-secondary} !important;
 
     &:hover {
-      border-color: #{$primary-color};
-      color: #{$primary-color};
+      border-color: #{$primary-color} !important;
+      color: #{$primary-color} !important;
     }
 
     &.is-active {
-      background: #{$primary-gradient};
-      border-color: #{$primary-color};
-      color: #fff;
+      background: #{$primary-gradient} !important;
+      border-color: #{$primary-color} !important;
+            color: $text-primary !important;
     }
   }
 
   .btn-prev, .btn-next {
-    background: #{$bg-card};
-    border: 1px solid #{$border-color};
-    color: #{$text-secondary};
+    background: #{$bg-card} !important;
+    border: 1px solid #{$border-color} !important;
+    color: #{$text-secondary} !important;
 
     &:hover {
-      border-color: #{$primary-color};
-      color: #{$primary-color};
+      border-color: #{$primary-color} !important;
+      color: #{$primary-color} !important;
     }
 
     &.is-disabled {
-      color: #{$text-disabled};
-      border-color: #{$border-color};
+      color: #{$text-disabled} !important;
+      border-color: #{$border-color} !important;
     }
   }
 
   .el-pagination__sizes .el-input__wrapper {
-    background: #{$bg-card};
+    background: #{$bg-card} !important;
   }
 
   .el-pagination__jump .el-input__wrapper {
-    background: #{$bg-card};
+    background: #{$bg-card} !important;
   }
 }
 
-// 选择器下拉列表项适配
+// 选择器下拉列表项适配（最高优先级）
 .el-select-dropdown__item {
-  color: #{$text-secondary};
-  background: transparent;
+  color: #{$text-secondary} !important;
+  background: transparent !important;
 
   &:hover {
-    background: rgba(100, 108, 255, 0.1);
-    color: #{$primary-color};
+    background: rgba(100, 108, 255, 0.1) !important;
+    color: #{$primary-color} !important;
   }
 
   &.is-selected {
-    background: rgba(100, 108, 255, 0.2);
-    color: #{$primary-color};
-    font-weight: 500;
+    background: rgba(100, 108, 255, 0.2) !important;
+    color: #{$primary-color} !important;
+    font-weight: 500 !important;
   }
 
   &.is-disabled {
-    color: #{$text-disabled};
+    color: #{$text-disabled} !important;
   }
+}
+
+// 输入框字数统计适配
+.el-input__count {
+  color: #{$text-tertiary} !important;
+  background: transparent !important;
+}
+
+// 分页下拉选择框适配
+.el-pagination .el-select-dropdown {
+  background: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
+}
+
+.el-pagination .el-select-dropdown__item {
+  background: #{$bg-card} !important;
+  color: #{$text-secondary} !important;
+  &:hover {
+    background: rgba(100, 108, 255, 0.1) !important;
+    color: #{$primary-color} !important;
+  }
+}
+
+.el-pagination .el-input__wrapper {
+  background: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
+}
+
+// 输入框内容和占位符适配
+.el-input__inner,
+.el-textarea__inner {
+  color: #{$text-primary} !important;
+  background: #{$bg-card} !important;
+  &::placeholder {
+    color: #{$text-tertiary} !important;
+  }
+}
+
+// 输入框字数统计适配（彻底解决白色背景）
+.el-input__count,
+.el-textarea__count,
+.el-input__count-inner,
+.el-textarea__count-inner {
+  color: #{$text-tertiary} !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+// 分页条/页选择框彻底解决白色背景
+.el-pagination__sizes .el-input__wrapper {
+  background: #{$bg-card} !important;
+  background-color: #{$bg-card} !important;
+  border-color: #{$border-color} !important;
+  box-shadow: none !important;
+}
+.el-pagination__sizes .el-input__wrapper:hover,
+.el-pagination__sizes .el-input__wrapper:focus,
+.el-pagination__sizes .el-input__wrapper.is-focus {
+  background: #{$bg-card} !important;
+  background-color: #{$bg-card} !important;
+  border-color: #{$primary-color} !important;
+}
+.el-pagination__sizes .el-input__inner {
+  background: transparent !important;
+}
+
+.el-pagination__sizes .el-select__wrapper,
+.el-select__wrapper {
+  background: #{$bg-card} !important;
+  background-color: #{$bg-card} !important;
+  border: 1px solid #{$border-color} !important;
+  box-shadow: none !important;
+  color: #{$text-primary} !important;
+
+  &:hover,
+  &.is-focused {
+    border-color: #{$primary-color} !important;
+    box-shadow: 0 0 0 1px #{$primary-color} inset !important;
+  }
+}
+
+.el-select__placeholder,
+.el-select__selected-item {
+  color: #{$text-primary} !important;
+}
+
+// 彻底隐藏所有下拉选择框滚动条
+.el-select-dropdown {
+  scrollbar-width: none !important; /* Firefox */
+  -ms-overflow-style: none !important; /* IE 10+ */
+}
+.el-select-dropdown::-webkit-scrollbar {
+  display: none !important; /* Chrome Safari */
+}
+.el-select-dropdown__list {
+  padding: 6px 0 !important;
+  overflow-y: auto !important;
+  scrollbar-width: none !important;
+}
+.el-select-dropdown__list::-webkit-scrollbar {
+  display: none !important;
+}
+
+// 去掉下拉框多余内边距
+.el-select-dropdown__list {
+  padding: 6px 0 !important;
 }
 
 // 下拉菜单适配
