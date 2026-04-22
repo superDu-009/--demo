@@ -23,8 +23,7 @@ public class AssetCreateRequest {
     @Schema(description = "AI描述文本")
     private String description;
 
-    @Schema(description = "参考图URL数组JSON字符串", requiredMode = Schema.RequiredMode.REQUIRED)
-    @NotBlank(message = "参考图不能为空")
+    @Schema(description = "参考图URL数组JSON字符串")
     private String referenceImages;
 
     @Schema(description = "风格预设JSON")

@@ -75,3 +75,306 @@ html.dark,
 .el-form-item__label {
   width: #{$form-label-width};
 }
+
+// 分页组件适配
+.el-pagination {
+  --el-pagination-bg-color: #{$bg-card};
+  --el-pagination-text-color: #{$text-secondary};
+  --el-pagination-hover-color: #{$primary-color};
+
+  .el-pager li {
+    background: #{$bg-card};
+    border: 1px solid #{$border-color};
+    color: #{$text-secondary};
+
+    &:hover {
+      border-color: #{$primary-color};
+      color: #{$primary-color};
+    }
+
+    &.is-active {
+      background: #{$primary-gradient};
+      border-color: #{$primary-color};
+      color: #fff;
+    }
+  }
+
+  .btn-prev, .btn-next {
+    background: #{$bg-card};
+    border: 1px solid #{$border-color};
+    color: #{$text-secondary};
+
+    &:hover {
+      border-color: #{$primary-color};
+      color: #{$primary-color};
+    }
+
+    &.is-disabled {
+      color: #{$text-disabled};
+      border-color: #{$border-color};
+    }
+  }
+
+  .el-pagination__sizes .el-input__wrapper {
+    background: #{$bg-card};
+  }
+
+  .el-pagination__jump .el-input__wrapper {
+    background: #{$bg-card};
+  }
+}
+
+// 选择器下拉列表项适配
+.el-select-dropdown__item {
+  color: #{$text-secondary};
+  background: transparent;
+
+  &:hover {
+    background: rgba(100, 108, 255, 0.1);
+    color: #{$primary-color};
+  }
+
+  &.is-selected {
+    background: rgba(100, 108, 255, 0.2);
+    color: #{$primary-color};
+    font-weight: 500;
+  }
+
+  &.is-disabled {
+    color: #{$text-disabled};
+  }
+}
+
+// 下拉菜单适配
+.el-dropdown-menu {
+  background: #{$bg-card};
+  border-color: #{$border-color};
+
+  .el-dropdown-menu__item {
+    color: #{$text-secondary};
+    background: transparent;
+
+    &:hover {
+      background: rgba(100, 108, 255, 0.1);
+      color: #{$primary-color};
+    }
+
+    &.is-disabled {
+      color: #{$text-disabled};
+    }
+  }
+}
+
+// 日期/时间选择器适配
+.el-date-editor {
+  .el-input__wrapper {
+    background: #{$bg-card};
+  }
+}
+
+.el-picker-panel {
+  background: #{$bg-card};
+  border-color: #{$border-color};
+  color: #{$text-secondary};
+
+  .el-date-picker__header-label {
+    color: #{$text-primary};
+  }
+
+  .el-picker-panel__icon-btn {
+    color: #{$text-secondary};
+
+    &:hover {
+      color: #{$primary-color};
+    }
+  }
+
+  .el-date-table th {
+    color: #{$text-tertiary};
+  }
+
+  .el-date-table td {
+    color: #{$text-secondary};
+
+    &.in-range,
+    &.start-date,
+    &.end-date {
+      background: rgba(100, 108, 255, 0.1);
+      color: #{$primary-color};
+    }
+
+    &.today {
+      color: #{$primary-color};
+    }
+
+    &.available:hover {
+      background: rgba(100, 108, 255, 0.15);
+      color: #{$primary-color};
+    }
+  }
+}
+
+// 单选框适配
+.el-radio {
+  .el-radio__label {
+    color: #{$text-secondary};
+  }
+
+  .el-radio__input.is-checked .el-radio__inner {
+    background: #{$primary-color};
+    border-color: #{$primary-color};
+  }
+
+  &:hover .el-radio__inner {
+    border-color: #{$primary-color};
+  }
+}
+
+// 复选框适配
+.el-checkbox {
+  .el-checkbox__label {
+    color: #{$text-secondary};
+  }
+
+  .el-checkbox__input.is-checked .el-checkbox__inner {
+    background: #{$primary-color};
+    border-color: #{$primary-color};
+  }
+
+  &:hover .el-checkbox__inner {
+    border-color: #{$primary-color};
+  }
+}
+
+// 开关适配
+.el-switch {
+  .el-switch__core {
+    background: rgba(100, 108, 255, 0.2);
+    border-color: #{$border-color};
+
+    &.is-checked {
+      background: #{$primary-color};
+      border-color: #{$primary-color};
+    }
+  }
+}
+
+// 滑块适配
+.el-slider {
+  .el-slider__runway {
+    background: rgba(100, 108, 255, 0.1);
+  }
+
+  .el-slider__bar {
+    background: #{$primary-gradient};
+  }
+
+  .el-slider__button {
+    border-color: #{$primary-color};
+    background: #{$primary-color};
+  }
+}
+
+// 消息提示适配
+.el-message {
+  background: #{$bg-card};
+  border-color: #{$border-color};
+  color: #{$text-primary};
+}
+
+// 通知适配
+.el-notification {
+  background: #{$bg-card};
+  border-color: #{$border-color};
+  color: #{$text-primary};
+
+  .el-notification__title {
+    color: #{$text-primary};
+  }
+
+  .el-notification__content {
+    color: #{$text-secondary};
+  }
+}
+
+// 气泡确认框适配
+.el-popover {
+  background: #{$bg-card};
+  border-color: #{$border-color};
+  color: #{$text-secondary};
+}
+
+// 空状态适配
+.el-empty {
+  .el-empty__description {
+    color: #{$text-secondary};
+  }
+}
+
+// 加载适配
+.el-loading-mask {
+  background: rgba(10, 10, 18, 0.7);
+}
+
+.el-loading-spinner .el-loading-text {
+  color: #{$primary-color};
+}
+
+// 树形控件适配
+.el-tree {
+  background: #{$bg-card};
+  color: #{$text-secondary};
+
+  .el-tree-node__content:hover {
+    background: rgba(100, 108, 255, 0.1);
+  }
+
+  .el-tree-node.is-current > .el-tree-node__content {
+    background: rgba(100, 108, 255, 0.2);
+    color: #{$primary-color};
+  }
+}
+
+// 上传组件适配
+.el-upload {
+  .el-upload-dragger {
+    background: #{$bg-card};
+    border-color: #{$border-color};
+    color: #{$text-secondary};
+
+    &:hover {
+      border-color: #{$primary-color};
+    }
+  }
+}
+
+// 步骤条适配
+.el-steps {
+  .el-step__title.is-process {
+    color: #{$primary-color};
+  }
+
+  .el-step__title.is-success {
+    color: #{$accent-green};
+  }
+
+  .el-step__title.is-wait {
+    color: #{$text-secondary};
+  }
+
+  .el-step__icon.is-process {
+    background: #{$primary-color};
+    border-color: #{$primary-color};
+  }
+
+  .el-step__icon.is-success {
+    background: #{$accent-green};
+    border-color: #{$accent-green};
+  }
+
+  .el-step__icon.is-wait {
+    background: #{$bg-card};
+    border-color: #{$border-color};
+    color: #{$text-secondary};
+  }
+}

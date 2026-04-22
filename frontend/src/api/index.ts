@@ -50,7 +50,10 @@ instance.interceptors.response.use(
         const authStore = useAuthStore()
         authStore.clearAuth()
         ElMessage.error('登录已过期，请重新登录')
-        router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
+        // 避免跳转死循环：当前已经在登录页则不重复跳转
+        if (router.currentRoute.value.name !== 'Login') {
+          router.push({ name: 'Login', query: { redirect: router.currentRoute.value.fullPath } })
+        }
         break
 
       case 403:
@@ -123,3 +126,4 @@ class BusinessError extends Error {
 }
 
 export default instance
+export { BusinessError }

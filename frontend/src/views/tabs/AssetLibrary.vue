@@ -1,115 +1,12 @@
-<!-- views/tabs/AssetLibrary.vue — 资产库页面
-     系分第 4.4 节：资产类型 Tab + 搜索 + 卡片网格 -->
-<template>
-  <div class="asset-library-page">
-    <!-- 顶部工具栏 -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <!-- 资产类型 Tab -->
-        <div class="asset-type-tabs">
-          <div
-            v-for="type in assetTypeList"
-            :key="type.value"
-            class="tab-item"
-            :class="{ active: assetType === type.value }"
-            @click="assetType = type.value; handleTypeChange()"
-          >
-            {{ type.label }}
-          </div>
-        </div>
-      </div>
-      <div class="toolbar-right">
-        <!-- 搜索框 -->
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索资产名称"
-          style="width: 240px; margin-right: 12px"
-          clearable
-          @input="handleSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <!-- 新建资产按钮 -->
-        <el-button class="btn-gradient" @click="openCreateDialog">
-          <el-icon><Plus /></el-icon>
-          新建资产
-        </el-button>
-      </div>
-    </div>
-
-    <!-- 资产卡片列表 -->
-    <div class="asset-card-list" v-loading="loading">
-      <el-row :gutter="16">
-        <el-col :xs="24" :sm="12" :md="8" :lg="6" v-for="asset in assetList" :key="asset.id">
-          <AssetCard :asset="asset" @edit="openEditDialog" @delete="handleDelete" @confirm="handleConfirm" />
-        </el-col>
-      </el-row>
-
-      <!-- 空状态 -->
-      <div v-if="assetList.length === 0 && !loading" class="empty-container">
-        <el-empty description="暂无资产，点击「新建资产」开始创建" />
-      </div>
-    </div>
-
-    <!-- 分页 -->
-    <div class="pagination-container" v-if="total > 0">
-      <el-pagination
-        v-model:current-page="pageParams.page"
-        v-model:page-size="pageParams.size"
-        :total="total"
-        :page-sizes="[12, 24, 48]"
-        layout="total, sizes, prev, pager, next, jumper"
-        @size-change="fetchAssetList"
-        @current-change="fetchAssetList"
-      />
-    </div>
-
-    <!-- 新建/编辑资产弹窗 -->
-    <el-dialog
-      v-model="dialogVisible"
-      :title="isEdit ? '编辑资产' : '新建资产'"
-      width="600px"
-      destroy-on-close
-    >
-      <AssetForm
-        ref="formRef"
-        :asset-type="assetType === 'all' ? 'character' : assetType"
-        :edit-data="isEdit ? currentEditAsset : null"
-        @submit="handleFormSubmit"
-      />
-    </el-dialog>
-
-    <!-- 删除确认弹窗 -->
-    <el-dialog
-      v-model="deleteDialogVisible"
-      title="确认删除"
-      width="400px"
-    >
-      <p>确定要删除资产「{{ currentDeleteAsset?.name }}」吗？</p>
-      <p v-if="deleteWarning" class="warning-text">{{ deleteWarning }}</p>
-      <template #footer>
-        <el-button @click="deleteDialogVisible = false">取消</el-button>
-        <el-button type="danger" @click="confirmDelete" :loading="deleteLoading">删除</el-button>
-      </template>
-    </el-dialog>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Plus, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { assetApi } from '@/api/asset'
-import type { AssetVO } from '@/types'
-// 缺失组件，临时注释
-import AssetCard from '@/components/Asset/AssetCard.vue'
-// import AssetForm from '@/components/Asset/AssetForm.vue'
+import type { AssetVO, AssetCreateRequest, AssetUpdateRequest } from '@/types'
 
 const route = useRoute()
-const formRef = ref<any>()
 
 // 状态变量
 const loading = ref(false)
@@ -242,7 +139,7 @@ const confirmDelete = async () => {
     deleteDialogVisible.value = false
     fetchAssetList()
   } catch (err: any) {
-    if (err.response?.data?.code === 40901) {
+    if (err.response?.data.code === 40901) {
       ElMessage.error('资产已被分镜引用，不可删除')
     } else {
       ElMessage.error('删除失败')
@@ -269,71 +166,3 @@ onMounted(() => {
   fetchAssetList()
 })
 </script>
-
-<style scoped lang="scss">
-.asset-library-page {
-  width: 100%;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.asset-type-tabs {
-  display: flex;
-  gap: 6px;
-  padding: 4px;
-  background: rgba(22, 24, 38, 0.7);
-  border-radius: 12px;
-  border: 1px solid rgba(100, 108, 255, 0.2);
-
-  .tab-item {
-    padding: 8px 16px;
-    border-radius: 10px;
-    font-size: 14px;
-    font-weight: 500;
-    color: $text-secondary;
-    cursor: pointer;
-    transition: all 0.3s ease;
-
-    &:hover {
-      background: rgba(100, 108, 255, 0.1);
-      color: $primary-color;
-    }
-
-    &.active {
-      background: $primary-gradient;
-      color: #fff;
-      box-shadow: 0 0 12px rgba(100, 108, 255, 0.3);
-    }
-  }
-}
-
-.toolbar-right {
-  display: flex;
-  align-items: center;
-}
-
-.asset-card-list {
-  min-height: 500px;
-}
-
-.empty-container {
-  padding: 80px 0;
-}
-
-.pagination-container {
-  display: flex;
-  justify-content: center;
-  margin-top: 32px;
-}
-
-.warning-text {
-  color: $danger-color;
-  margin-top: 8px;
-  font-size: 14px;
-}
-</style>

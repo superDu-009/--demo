@@ -120,9 +120,14 @@ html, body, #app {
 
 // 弹窗
 :deep(.el-dialog) {
+  background: rgba(22, 24, 38, 0.95) !important;
+  backdrop-filter: blur(12px) !important;
+  border: 1px solid rgba(100, 108, 255, 0.2) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+
   .el-dialog__header {
-    background: rgba(22, 24, 38, 0.95);
-    backdrop-filter: blur(12px);
+    background: transparent;
     border-bottom: 1px solid rgba(100, 108, 255, 0.2);
     padding: 20px 24px;
     .el-dialog__title {
@@ -133,15 +138,13 @@ html, body, #app {
   }
 
   .el-dialog__body {
-    background: rgba(22, 24, 38, 0.95);
-    backdrop-filter: blur(12px);
+    background: transparent;
     padding: 24px;
     color: $text-primary;
   }
 
   .el-dialog__footer {
-    background: rgba(22, 24, 38, 0.95);
-    backdrop-filter: blur(12px);
+    background: transparent;
     border-top: 1px solid rgba(100, 108, 255, 0.2);
     padding: 16px 24px;
   }

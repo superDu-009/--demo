@@ -26,9 +26,10 @@
         ref="fileInputRef"
         type="file"
         class="file-input"
-        :accept="accept"
+        :accept="acceptStr"
         :multiple="false"
         @change="handleFileChange"
+        @click.stop
       >
     </div>
 
@@ -52,8 +53,8 @@ import { UploadFilled, Document, Delete } from '@element-plus/icons-vue'
 import { useTosUpload } from '@/composables/useTosUpload'
 import type { UploadOptions } from '@/composables/useTosUpload'
 
-// 组件属性
-const props = defineProps<{
+// 组件属性 + 默认值（withDefaults必须直接包裹defineProps）
+const props = withDefaults(defineProps<{
   // 按钮文字
   buttonText?: string
   // 提示文字
@@ -76,15 +77,12 @@ const props = defineProps<{
   showPreview?: boolean
   // 已上传的文件地址
   modelValue?: string
-}>()
-
-// 默认值
-const defaultProps = withDefaults(props, {
+}>(), {
   buttonText: '点击上传文件',
   tipText: '单文件最大50MB',
   accept: '*',
   maxFileSize: 50 * 1024 * 1024,
-  allowedTypes: () => ['image/png', 'image/jpeg', 'video/mp4', 'text/plain'],
+  allowedTypes: () => ['image/png', 'image/jpeg', 'video/mp4', 'text/plain', 'text/markdown'],
   disabled: false,
   showPreview: true,
   modelValue: ''
@@ -174,8 +172,9 @@ const doUpload = async (file: File) => {
     }
 
     await upload(file, options)
-  } catch (error) {
+  } catch (error: any) {
     console.error('上传失败', error)
+    ElMessage.error(error.message || '上传失败，请稍后重试')
   }
 }
 
@@ -186,7 +185,7 @@ const handleDelete = () => {
   emit('update:modelValue', '')
 }
 
-// 判断是否是图片类型
+// 判断是否是安全图片类型（仅允许纯位图格式，禁止SVG等可执行脚本的文件预览，防止XSS）
 const isImageType = (url: string) => {
   return /\.(png|jpe?g|gif|webp)$/i.test(url)
 }
@@ -203,6 +202,8 @@ const isImageType = (url: string) => {
   min-height: 150px;
   border: 2px dashed rgba(100, 108, 255, 0.3);
   border-radius: 12px;
+  background: rgba(100, 108, 255, 0.03);
+  backdrop-filter: blur(8px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -212,6 +213,7 @@ const isImageType = (url: string) => {
 
   &.dragover {
     border-color: $border-glow-color;
+    background: rgba(100, 108, 255, 0.08);
   }
 
   &-disabled {

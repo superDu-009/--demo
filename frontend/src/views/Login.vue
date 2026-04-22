@@ -112,10 +112,12 @@ const handleLogin = async () => {
       username: res.data.username,
       nickname: res.data.nickname
     })
-    ElMessage.success('登录成功')
-    // 登录后跳转：优先使用 redirect 参数，否则跳转项目列表
-    const redirect = (route.query.redirect as string) || '/projects'
-    router.push(redirect)
+      ElMessage.success('登录成功')
+      // 登录后跳转：优先使用 redirect 参数，否则跳转项目列表
+      const redirect = (route.query.redirect as string) || '/projects'
+      // 安全校验：仅允许站内相对路径跳转，防止开放重定向漏洞
+      const isInternalPath = /^\/[^/\\]/g.test(redirect) && !/^(http|\/\/)/i.test(redirect)
+      router.push(isInternalPath ? redirect : '/projects')
   } catch {
     // 拦截器已处理错误提示，此处无需额外处理
   } finally {

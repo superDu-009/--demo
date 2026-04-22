@@ -33,6 +33,7 @@ application-dev.yml
 .env.local
 *.db
 *.sqlite
+.docs/
 # 忽略敏感配置文件
 backend/src/main/resources/application.yml
 

@@ -3,26 +3,34 @@
 <template>
   <el-container class="app-layout">
     <!-- 左侧霓虹导航栏 -->
-    <el-aside class="sidebar" width="80px">
+    <el-aside class="sidebar" width="220px">
       <div class="sidebar-logo" @click="router.push({ name: 'ProjectList' })">
         <el-icon :size="36" class="logo-icon text-neon"><VideoPlay /></el-icon>
       </div>
-      <div class="sidebar-menu">
-        <div 
-          v-for="item in menuList" 
-          :key="item.path"
-          class="menu-item"
-          :class="{ active: $route.name === item.name }"
-          @click="router.push({ name: item.name })"
-        >
-          <el-icon :size="24" class="menu-icon"><component :is="item.icon" /></el-icon>
-          <span class="menu-tooltip">{{ item.title }}</span>
+        <div class="sidebar-menu">
+            <el-tooltip 
+              v-for="item in menuList" 
+              :key="item.path"
+              :disabled="!item.disabled || item.name === 'ProjectList'"
+              content="请先选择一个项目进入详情页"
+              placement="right"
+            >
+              <div 
+                class="menu-item"
+                :class="{ active: $route.name === item.name, disabled: item.name !== 'ProjectList' && !$route.params.id }"
+                @click="handleMenuClick(item)"
+              >
+                <div class="menu-indicator"></div>
+                <el-icon class="menu-icon"><component :is="item.icon" /></el-icon>
+                <span class="menu-title">{{ item.title }}</span>
+              </div>
+            </el-tooltip>
         </div>
-      </div>
-      <div class="sidebar-footer">
+       <div class="sidebar-footer">
         <div class="menu-item" @click="handleLogout">
-          <el-icon :size="24" class="menu-icon"><SwitchButton /></el-icon>
-          <span class="menu-tooltip">退出登录</span>
+          <div class="menu-indicator"></div>
+          <el-icon class="menu-icon"><SwitchButton /></el-icon>
+          <span class="menu-title">退出登录</span>
         </div>
       </div>
     </el-aside>
@@ -79,31 +87,31 @@ const menuList = [
   {
     name: 'ProjectList',
     path: '/projects',
-    title: '项目列表',
+    title: '项目管理',
     icon: FolderOpened
   },
   {
     name: 'AssetLibrary',
     path: '/projects/:id/assets',
-    title: '资产库',
+    title: '素材中心',
     icon: Picture
   },
   {
     name: 'WorkflowEditor',
     path: '/projects/:id/workflow',
-    title: '流程编辑器',
+    title: '工作流配置',
     icon: Grid
   },
   {
     name: 'ShotWorkbench',
     path: '/projects/:id/shots',
-    title: '分镜工作台',
+    title: '分镜制作',
     icon: Film
   },
   {
     name: 'ApiCost',
     path: '/projects/:id/cost',
-    title: 'API消耗',
+    title: '数据统计',
     icon: DataAnalysis
   }
 ]
@@ -113,6 +121,25 @@ const currentPageTitle = computed(() => {
   const currentMenu = menuList.find(item => item.name === route.name)
   return currentMenu?.title || 'AI漫剧生产平台'
 })
+
+// 处理菜单点击
+const handleMenuClick = (item: any) => {
+  // 项目管理不需要参数，直接跳转
+  if (item.name === 'ProjectList') {
+    router.push({ name: item.name })
+    return
+  }
+
+  // 其他菜单需要项目ID参数
+  const projectId = route.params.id
+  if (!projectId) {
+    ElMessage.warning('请先选择一个项目进入详情页')
+    return
+  }
+
+  // 有ID的话正常跳转
+  router.push({ name: item.name, params: { id: projectId } })
+}
 
 // 处理登出：清除认证状态后跳转登录页
 const handleLogout = async () => {
@@ -129,24 +156,25 @@ const handleLogout = async () => {
   display: flex;
 }
 
-// 左侧导航栏
+// 左侧导航栏（展开状态）
 .sidebar {
   background: rgba(22, 24, 38, 0.9);
   backdrop-filter: blur(12px);
   border-right: 1px solid rgba(100, 108, 255, 0.2);
   height: 100vh;
+  width: 220px;
   position: fixed;
   left: 0;
   top: 0;
   z-index: 1000;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 20px 0;
-  transition: all 0.3s ease;
+  align-items: flex-start;
+  padding: 20px 16px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 
   &:hover {
-    box-shadow: 0 0 30px rgba(100, 108, 255, 0.2);
+    box-shadow: 0 0 30px rgba(100, 108, 255, 0.25);
     border-right-color: $border-glow-color;
   }
 
@@ -154,17 +182,37 @@ const handleLogout = async () => {
   .sidebar-logo {
     margin-bottom: 40px;
     cursor: pointer;
-    padding: 10px;
+    padding: 12px 16px;
     border-radius: 12px;
-    transition: all 0.3s ease;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
 
     &:hover {
       background: rgba(100, 108, 255, 0.1);
       box-shadow: 0 0 20px rgba(100, 108, 255, 0.2);
+      padding-left: 20px;
+    }
+
+    &:active {
+      transform: scale(0.98);
     }
 
     .logo-icon {
       animation: pulse 2s infinite;
+      font-size: 32px;
+    }
+
+    .logo-text {
+      font-size: 18px;
+      font-weight: 700;
+      background: $primary-gradient;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
   }
 
@@ -174,8 +222,7 @@ const handleLogout = async () => {
     width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 16px;
+    gap: 8px;
   }
 
   // 底部区域
@@ -183,78 +230,75 @@ const handleLogout = async () => {
     width: 100%;
     display: flex;
     flex-direction: column;
-    align-items: center;
+    gap: 8px;
     margin-top: auto;
   }
 
   // 菜单项
   .menu-item {
     position: relative;
-    width: 56px;
-    height: 56px;
+    width: 100%;
+    height: 52px;
     border-radius: 12px;
     display: flex;
     align-items: center;
-    justify-content: center;
+    gap: 12px;
+    padding: 0 16px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     color: $text-secondary;
+    user-select: none;
 
     &:hover {
       background: rgba(100, 108, 255, 0.15);
       color: $primary-color;
-      transform: translateY(-2px);
+      padding-left: 20px;
+    }
 
-      .menu-tooltip {
-        opacity: 1;
-        visibility: visible;
-        transform: translateX(0);
-      }
+    &:active {
+      transform: scale(0.98);
     }
 
     &.active {
       background: $primary-gradient;
       color: #fff;
       box-shadow: 0 0 20px rgba(100, 108, 255, 0.4);
+      padding-left: 20px;
+
+      .menu-indicator {
+        opacity: 1;
+        transform: scaleY(1);
+      }
+    }
+
+    &.disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+      pointer-events: all;
+    }
+
+    .menu-indicator {
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%) scaleY(0);
+      width: 3px;
+      height: 24px;
+      background: #fff;
+      border-radius: 0 2px 2px 0;
+      opacity: 0;
+      transition: all 0.2s ease;
     }
 
     .menu-icon {
-      font-size: 24px;
+      font-size: 22px;
+      transition: all 0.2s ease;
     }
 
-    // 提示框
-    .menu-tooltip {
-      position: absolute;
-      left: 72px;
-      top: 50%;
-      transform: translateY(-50%) translateX(10px);
-      background: rgba(22, 24, 38, 0.95);
-      backdrop-filter: blur(12px);
-      padding: 8px 16px;
-      border-radius: 8px;
-      border: 1px solid $border-color;
-      color: $text-primary;
+    .menu-title {
       font-size: 14px;
-      white-space: nowrap;
-      opacity: 0;
-      visibility: hidden;
-      transition: all 0.3s ease;
-      z-index: 1001;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-
-      &::before {
-        content: '';
-        position: absolute;
-        left: -6px;
-        top: 50%;
-        transform: translateY(-50%);
-        width: 10px;
-        height: 10px;
-        background: rgba(22, 24, 38, 0.95);
-        border-left: 1px solid $border-color;
-        border-bottom: 1px solid $border-color;
-        transform: translateY(-50%) rotate(45deg);
-      }
+      font-weight: 500;
+      transition: all 0.2s ease;
     }
   }
 }
@@ -262,7 +306,7 @@ const handleLogout = async () => {
 // 主内容区域
 .main-container {
   flex: 1;
-  margin-left: 80px;
+  margin-left: 220px;
   height: 100vh;
   display: flex;
   flex-direction: column;
