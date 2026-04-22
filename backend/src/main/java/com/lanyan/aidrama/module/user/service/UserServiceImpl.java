@@ -8,6 +8,7 @@ import com.lanyan.aidrama.entity.SysUser;
 import com.lanyan.aidrama.mapper.SysUserMapper;
 import com.lanyan.aidrama.module.user.dto.LoginRequest;
 import com.lanyan.aidrama.module.user.dto.LoginVO;
+import com.lanyan.aidrama.module.user.dto.UserInfoVO;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -55,6 +56,26 @@ public class UserServiceImpl implements UserService {
         loginVO.setNickname(user.getNickname());
 
         return loginVO;
+    }
+
+    @Override
+    public UserInfoVO getCurrentUserInfo() {
+        // 从 Sa-Token 获取当前登录用户ID
+        Long userId = StpUtil.getLoginIdAsLong();
+
+        // 查询用户信息
+        SysUser user = sysUserMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        // 构建脱敏用户信息
+        UserInfoVO vo = new UserInfoVO();
+        vo.setId(user.getId());
+        vo.setUsername(user.getUsername());
+        vo.setNickname(user.getNickname());
+        vo.setStatus(user.getStatus());
+        return vo;
     }
 
     @Override

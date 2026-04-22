@@ -21,14 +21,14 @@ public class PageResult<T> {
     private boolean hasNext;
 
     /** 数据列表 */
-    private T list;
+    private java.util.List<T> list;
 
     /**
      * 静态工厂方法：从 MyBatis-Plus IPage 构建 PageResult
      * hasNext 计算：当前页 * 每页大小 < 总数
      */
-    public static <T> PageResult<java.util.List<T>> of(com.baomidou.mybatisplus.core.metadata.IPage<T> page) {
-        PageResult<java.util.List<T>> result = new PageResult<>();
+    public static <T> PageResult<T> of(com.baomidou.mybatisplus.core.metadata.IPage<T> page) {
+        PageResult<T> result = new PageResult<>();
         result.setTotal(page.getTotal());
         result.setPage((int) page.getCurrent());
         result.setSize((int) page.getSize());

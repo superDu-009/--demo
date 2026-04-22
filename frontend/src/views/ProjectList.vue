@@ -118,8 +118,16 @@
           />
         </el-form-item>
         <el-form-item label="小说文件" v-if="!isEdit">
-<!-- 小说文件上传（临时实现，等ImageUploader组件完成后替换） -->
-<el-input v-model="formData.novelTosPath" placeholder="请输入小说文件TOS路径" />
+          <TosUpload
+            v-model="formData.novelTosPath"
+            :project-id="0"
+            file-type="other"
+            button-text="上传小说文件"
+            tip-text="支持txt/docx格式，最大10MB"
+            :allowed-types="['text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']"
+            :max-file-size="10 * 1024 * 1024"
+            @success="handleNovelUploadSuccess"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -150,10 +158,10 @@ import { Plus, Search, Calendar, Lock } from '@element-plus/icons-vue'
 import { ElMessage, ElForm } from 'element-plus'
 import dayjs from 'dayjs'
 import { projectApi } from '@/api/project'
+import TosUpload from '@/components/Common/TosUpload.vue'
 import type { ProjectVO, ProjectCreateRequest, ProjectUpdateRequest } from '@/types'
 // 移除缺失组件引用
 // import StatusTag from '@/components/Common/StatusTag.vue'
-// import ImageUploader from '@/components/Asset/ImageUploader.vue'
 
 const router = useRouter()
 const formRef = ref<InstanceType<typeof ElForm>>()
@@ -168,6 +176,7 @@ const searchKeyword = ref('')
 const projectList = ref<ProjectVO[]>([])
 const total = ref(0)
 const isEdit = ref(false)
+const currentEditId = ref<number | null>(null)
 const currentDeleteProject = ref<ProjectVO | null>(null)
 
 // 分页参数
@@ -230,6 +239,7 @@ const openCreateDialog = () => {
 // 打开编辑弹窗
 const openEditDialog = (project: ProjectVO) => {
   isEdit.value = true
+  currentEditId.value = project.id
   formData.name = project.name
   formData.description = project.description || ''
   formData.novelTosPath = project.novelTosPath || ''
@@ -251,14 +261,13 @@ const handleSubmit = async () => {
 
   submitLoading.value = true
   try {
-    if (isEdit.value) {
+    if (isEdit.value && currentEditId.value) {
       // 编辑项目
       const updateData: ProjectUpdateRequest = {
         name: formData.name,
         description: formData.description
       }
-      // TODO: 获取当前编辑项目ID
-      // await projectApi.update(currentEditId, updateData)
+      await projectApi.update(currentEditId.value, updateData)
       ElMessage.success('编辑成功')
     } else {
       // 新建项目

@@ -44,7 +44,8 @@ export function useTosUpload() {
       const presignRes = await tosApi.presign({
         fileName: file.name,
         contentType: file.type,
-        projectDir: options.projectDir
+        source: 'frontend',
+        businessId: options.projectId
       })
       const presignResult = presignRes.data
 
@@ -54,19 +55,19 @@ export function useTosUpload() {
       // 5. 通知后端上传完成（v1.1：complete 失败仅重试 1 次）
       try {
         await tosApi.complete({
-          key: extractKeyFromUrl(presignResult.uploadUrl),
-          projectId: options.projectId,
-          fileType: options.fileType,
-          metadata: { originalName: file.name, size: file.size }
+          fileKey: presignResult.fileKey,
+          businessId: options.projectId,
+          fileSize: file.size,
+          originalName: file.name
         })
       } catch (completeError) {
         // v1.1：仅重试 1 次，不搞递增延迟、不上报监控
         try {
           await tosApi.complete({
-            key: extractKeyFromUrl(presignResult.uploadUrl),
-            projectId: options.projectId,
-            fileType: options.fileType,
-            metadata: { originalName: file.name, size: file.size }
+            fileKey: presignResult.fileKey,
+            businessId: options.projectId,
+            fileSize: file.size,
+            originalName: file.name
           })
         } catch (e2) {
           ElMessage.error('文件已上传，但记录保存失败，请刷新后重试')
