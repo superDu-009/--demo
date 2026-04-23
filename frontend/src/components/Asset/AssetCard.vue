@@ -13,8 +13,8 @@
         <el-icon :size="48" class="empty-icon"><Picture /></el-icon>
       </div>
       <!-- 状态标签 -->
-      <div class="status-tag">
-        {{ asset.status === 0 ? '草稿' : asset.status === 1 ? '已确认' : '已废弃' }}
+      <div class="status-tag" :class="`status-${asset.status}`">
+        {{ statusLabel }}
       </div>
     </div>
 
@@ -49,6 +49,7 @@
 import { computed } from 'vue'
 import { Picture } from '@element-plus/icons-vue'
 import type { AssetVO } from '@/types'
+import { ASSET_STATUS_MAP } from '@/constants/status'
 
 const props = defineProps<{
   asset: AssetVO
@@ -59,6 +60,8 @@ const emit = defineEmits<{
   delete: [asset: AssetVO]
   confirm: [asset: AssetVO]
 }>()
+
+const statusLabel = computed(() => ASSET_STATUS_MAP[props.asset.status]?.label || '未知')
 
 // 资产类型标签文本
 const typeLabel = computed(() => {
@@ -127,12 +130,12 @@ const tagType = computed(() => {
     color: #fff;
     backdrop-filter: blur(8px);
     background: rgba(144, 147, 153, 0.8);
-    
-    &:contains('已确认') {
+
+    &.status-1 {
       background: rgba(103, 194, 58, 0.8);
     }
-    
-    &:contains('已废弃') {
+
+    &.status-2 {
       background: rgba(245, 108, 108, 0.8);
     }
   }

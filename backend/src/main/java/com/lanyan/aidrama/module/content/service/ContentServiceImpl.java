@@ -7,6 +7,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
 import com.lanyan.aidrama.common.PageResult;
+import com.lanyan.aidrama.common.ContentStatus;
+import com.lanyan.aidrama.common.ShotStatus;
 import com.lanyan.aidrama.entity.*;
 import com.lanyan.aidrama.mapper.*;
 import com.lanyan.aidrama.module.content.dto.*;
@@ -20,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -66,7 +69,7 @@ public class ContentServiceImpl implements ContentService {
         episode.setTitle(req.getTitle());
         episode.setContent(req.getContent());
         episode.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        episode.setStatus(0); // 默认待处理
+        episode.setStatus(ContentStatus.PENDING);
 
         episodeMapper.insert(episode);
         log.info("创建分集成功, episodeId: {}, projectId: {}", episode.getId(), projectId);
@@ -166,7 +169,7 @@ public class ContentServiceImpl implements ContentService {
         scene.setTitle(req.getTitle());
         scene.setContent(req.getContent());
         scene.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        scene.setStatus(0);
+        scene.setStatus(ContentStatus.PENDING);
 
         sceneMapper.insert(scene);
         log.info("创建分场成功, sceneId: {}, episodeId: {}", scene.getId(), episodeId);
@@ -236,9 +239,58 @@ public class ContentServiceImpl implements ContentService {
 
         IPage<Shot> pageResult = shotMapper.selectPage(pageParam, wrapper);
 
-        List<ShotVO> voList = pageResult.getRecords().stream()
-                .map(this::toShotVO)
-                .collect(Collectors.toList());
+        List<Shot> shots = pageResult.getRecords();
+        if (shots.isEmpty()) {
+            PageResult<ShotVO> result = new PageResult<>();
+            result.setList(List.of());
+            result.setTotal(pageResult.getTotal());
+            result.setPage((int) pageResult.getCurrent());
+            result.setSize((int) pageResult.getSize());
+            result.setHasNext(false);
+            return result;
+        }
+
+        List<Long> shotIds = shots.stream()
+                .map(Shot::getId)
+                .toList();
+
+        // 批量查询资产关联
+        LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
+        refWrapper.in(ShotAssetRef::getShotId, shotIds);
+        List<ShotAssetRef> allRefs = shotAssetRefMapper.selectList(refWrapper);
+
+        // 批量查询资产信息
+        Map<Long, Asset> assetMap = Map.of();
+        if (!allRefs.isEmpty()) {
+            List<Long> assetIds = allRefs.stream()
+                    .map(ShotAssetRef::getAssetId)
+                    .distinct()
+                    .toList();
+            assetMap = assetMapper.selectBatchIds(assetIds).stream()
+                    .collect(Collectors.toMap(Asset::getId, a -> a));
+        }
+
+        // 批量查询最新 AI 任务
+        Map<Long, AiTask> taskMap = Map.of();
+        if (!shotIds.isEmpty()) {
+            LambdaQueryWrapper<AiTask> taskWrapper = new LambdaQueryWrapper<>();
+            taskWrapper.in(AiTask::getShotId, shotIds)
+                       .orderByDesc(AiTask::getId);
+            List<AiTask> allTasks = aiTaskMapper.selectList(taskWrapper);
+            taskMap = allTasks.stream()
+                    .collect(Collectors.toMap(AiTask::getShotId, t -> t, (existing, replacement) -> existing));
+        }
+
+        final Map<Long, Asset> finalAssetMap = assetMap;
+        final Map<Long, AiTask> finalTaskMap = taskMap;
+
+        // 按 shotId 分组资产关联
+        Map<Long, List<ShotAssetRef>> refsByShot = allRefs.stream()
+                .collect(Collectors.groupingBy(ShotAssetRef::getShotId));
+
+        List<ShotVO> voList = shots.stream()
+                .map(shot -> toShotVO(shot, refsByShot, finalAssetMap, finalTaskMap))
+                .toList();
 
         PageResult<ShotVO> result = new PageResult<>();
         result.setList(voList);
@@ -263,7 +315,7 @@ public class ContentServiceImpl implements ContentService {
         shot.setSceneId(sceneId);
         shot.setPrompt(req.getPrompt());
         shot.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        shot.setStatus(0); // 默认待处理
+        shot.setStatus(ShotStatus.PENDING);
         shot.setVersion(1);
         shot.setGenerationAttempts(0);
 
@@ -331,15 +383,13 @@ public class ContentServiceImpl implements ContentService {
                 continue;
             }
 
-            // 校验：只有生成中或待审核状态才能审核
-            if (shot.getStatus() != 1 && shot.getStatus() != 2) {
+            if (shot.getStatus() != ShotStatus.GENERATING && shot.getStatus() != ShotStatus.REVIEWING) {
                 addFailure(result, shotId, "分镜状态不支持当前操作");
                 continue;
             }
 
             if ("approve".equals(action)) {
-                // 通过
-                shot.setStatus(5); // 已完成
+                shot.setStatus(ShotStatus.COMPLETED);
                 shotMapper.updateById(shot);
                 result.setSuccessCount(result.getSuccessCount() + 1);
             } else if ("reject".equals(action)) {
@@ -348,7 +398,7 @@ public class ContentServiceImpl implements ContentService {
                     addFailure(result, shotId, "打回时必须填写审核意见");
                     continue;
                 }
-                shot.setStatus(4); // 已打回
+                shot.setStatus(ShotStatus.REJECTED);
                 shot.setReviewComment(comment);
                 shotMapper.updateById(shot);
                 result.setSuccessCount(result.getSuccessCount() + 1);
@@ -430,7 +480,13 @@ public class ContentServiceImpl implements ContentService {
         return vo;
     }
 
-    private ShotVO toShotVO(Shot shot) {
+    /**
+     * Shot 转 VO，使用预加载的关联数据避免 N+1 查询
+     */
+    private ShotVO toShotVO(Shot shot,
+                            Map<Long, List<ShotAssetRef>> refsByShot,
+                            Map<Long, Asset> assetMap,
+                            Map<Long, AiTask> taskMap) {
         ShotVO vo = new ShotVO();
         vo.setId(shot.getId());
         vo.setSceneId(shot.getSceneId());
@@ -444,33 +500,29 @@ public class ContentServiceImpl implements ContentService {
         vo.setVersion(shot.getVersion());
         vo.setGenerationAttempts(shot.getGenerationAttempts());
 
-        // 查询关联资产
-        LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
-        refWrapper.eq(ShotAssetRef::getShotId, shot.getId());
-        List<ShotAssetRef> refs = shotAssetRefMapper.selectList(refWrapper);
-
-        if (!refs.isEmpty()) {
+        // 填充关联资产
+        List<ShotAssetRef> refs = refsByShot.get(shot.getId());
+        if (refs != null && !refs.isEmpty()) {
             List<ShotAssetRefVO> assetRefVOs = new ArrayList<>();
             for (ShotAssetRef ref : refs) {
                 ShotAssetRefVO refVO = new ShotAssetRefVO();
                 refVO.setAssetId(ref.getAssetId());
                 refVO.setAssetType(ref.getAssetType());
-                Asset asset = assetMapper.selectById(ref.getAssetId());
+
+                Asset asset = assetMap.get(ref.getAssetId());
                 if (asset != null) {
                     refVO.setAssetName(asset.getName());
-                    refVO.setPrimaryImage(asset.getReferenceImages());
+                    if (asset.getReferenceImages() != null) {
+                        refVO.setPrimaryImage(asset.getReferenceImages());
+                    }
                 }
                 assetRefVOs.add(refVO);
             }
             vo.setAssetRefs(assetRefVOs);
         }
 
-        // 查询最新AI任务
-        LambdaQueryWrapper<AiTask> taskWrapper = new LambdaQueryWrapper<>();
-        taskWrapper.eq(AiTask::getShotId, shot.getId())
-                   .orderByDesc(AiTask::getId)
-                   .last("LIMIT 1");
-        AiTask latestTask = aiTaskMapper.selectOne(taskWrapper);
+        // 填充最新 AI 任务
+        AiTask latestTask = taskMap.get(shot.getId());
         if (latestTask != null) {
             ShotAiTaskVO taskVO = new ShotAiTaskVO();
             taskVO.setTaskId(latestTask.getId());

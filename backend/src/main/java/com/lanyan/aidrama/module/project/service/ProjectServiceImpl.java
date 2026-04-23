@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
 import com.lanyan.aidrama.common.PageResult;
+import com.lanyan.aidrama.common.ProjectStatus;
 import com.lanyan.aidrama.entity.*;
 import com.lanyan.aidrama.mapper.*;
 import com.lanyan.aidrama.module.project.dto.*;
@@ -17,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -62,7 +64,7 @@ public class ProjectServiceImpl implements ProjectService {
         project.setName(req.getName());
         project.setDescription(req.getDescription());
         project.setNovelTosPath(req.getNovelTosPath());
-        project.setStatus(0); // 默认草稿
+        project.setStatus(ProjectStatus.DRAFT);
         project.setExecutionLock(0);
         project.setVersion(0);
 
@@ -73,36 +75,14 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public ProjectVO getProjectDetail(Long id) {
-        // 查询项目详情，校验权限（项目归属）
-        Project project = projectMapper.selectById(id);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
-
-        // 校验项目归属
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (!project.getUserId().equals(currentUserId)) {
-            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
-        }
-
+        Project project = getProjectById(id);
         return toVO(project);
     }
 
     @Override
     public void updateProject(Long id, ProjectUpdateRequest req) {
-        // 查询项目
-        Project project = projectMapper.selectById(id);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Project project = getProjectById(id);
 
-        // 校验项目归属
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (!project.getUserId().equals(currentUserId)) {
-            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
-        }
-
-        // 更新字段（非空字段才更新）
         if (req.getName() != null) {
             project.setName(req.getName());
         }
@@ -123,48 +103,24 @@ public class ProjectServiceImpl implements ProjectService {
     @Override
     @Transactional
     public void deleteProject(Long id) {
-        // 查询项目
-        Project project = projectMapper.selectById(id);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Project project = getProjectById(id);
 
-        // 校验项目归属
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (!project.getUserId().equals(currentUserId)) {
-            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
-        }
-
-        // 校验 execution_lock，正在执行中不允许删除
         if (project.getExecutionLock() == 1) {
             throw new BusinessException(ErrorCode.PROJECT_EXECUTING);
         }
 
-        // 逻辑删除
         projectMapper.deleteById(id);
         log.info("删除项目成功, projectId: {}", id);
     }
 
     @Override
     public void saveWorkflowConfig(Long id, WorkflowConfigRequest req) {
-        // 查询项目
-        Project project = projectMapper.selectById(id);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Project project = getProjectById(id);
 
-        // 校验项目归属
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (!project.getUserId().equals(currentUserId)) {
-            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
-        }
-
-        // 仅允许草稿状态修改流程配置
-        if (project.getStatus() != 0) {
+        if (project.getStatus() != ProjectStatus.DRAFT) {
             throw new BusinessException(ErrorCode.PROJECT_EXECUTING);
         }
 
-        // 更新流程配置和风格预设
         project.setWorkflowConfig(req.getWorkflowConfig());
         project.setStylePreset(req.getStylePreset());
 
@@ -174,17 +130,8 @@ public class ProjectServiceImpl implements ProjectService {
 
     @Override
     public PageResult<ShotVO> listProjectShots(Long projectId, Long sceneId, Integer status, int page, int size) {
-        // 校验项目归属
-        Project project = projectMapper.selectById(projectId);
-        if (project == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
-        Long currentUserId = StpUtil.getLoginIdAsLong();
-        if (!project.getUserId().equals(currentUserId)) {
-            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
-        }
+        getProjectById(projectId);
 
-        // 构建查询条件：跨分场查询，通过 scene 关联到 episode，再关联到 project
         Page<Shot> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<Shot> wrapper = new LambdaQueryWrapper<>();
 
@@ -192,8 +139,6 @@ public class ProjectServiceImpl implements ProjectService {
         if (sceneId != null) {
             wrapper.eq(Shot::getSceneId, sceneId);
         } else {
-            // 查询该项目下所有分场的分镜（需要通过子查询或 in 查询）
-            // 简化方案：先查所有 scene，然后查 shot
             List<Long> sceneIds = getAllSceneIdsByProjectId(projectId);
             wrapper.in(Shot::getSceneId, sceneIds);
         }
@@ -209,10 +154,62 @@ public class ProjectServiceImpl implements ProjectService {
 
         IPage<Shot> pageResult = shotMapper.selectPage(pageParam, wrapper);
 
-        // 转换为 VO，填充 assetRefs 和 currentAiTask
-        List<ShotVO> voList = pageResult.getRecords().stream()
-                .map(shot -> toShotVO(shot, projectId))
-                .collect(Collectors.toList());
+        // 批量查询关联数据，避免 N+1
+        List<Shot> shots = pageResult.getRecords();
+        if (shots.isEmpty()) {
+            PageResult<ShotVO> result = new PageResult<>();
+            result.setList(List.of());
+            result.setTotal(pageResult.getTotal());
+            result.setPage((int) pageResult.getCurrent());
+            result.setSize((int) pageResult.getSize());
+            result.setHasNext(false);
+            return result;
+        }
+
+        List<Long> shotIds = shots.stream()
+                .map(Shot::getId)
+                .toList();
+
+        // 批量查询资产关联
+        LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
+        refWrapper.in(ShotAssetRef::getShotId, shotIds);
+        List<ShotAssetRef> allRefs = shotAssetRefMapper.selectList(refWrapper);
+
+        // 批量查询资产信息
+        Map<Long, Asset> assetMap = Map.of();
+        if (!allRefs.isEmpty()) {
+            List<Long> assetIds = allRefs.stream()
+                    .map(ShotAssetRef::getAssetId)
+                    .distinct()
+                    .toList();
+            assetMap = assetMapper.selectBatchIds(assetIds).stream()
+                    .collect(Collectors.toMap(Asset::getId, a -> a));
+        }
+
+        // 批量查询最新 AI 任务（每个 shotId 取最新一条）
+        Map<Long, AiTask> taskMap = Map.of();
+        if (!shotIds.isEmpty()) {
+            LambdaQueryWrapper<AiTask> taskWrapper = new LambdaQueryWrapper<>();
+            taskWrapper.in(AiTask::getShotId, shotIds)
+                       .orderByDesc(AiTask::getId);
+            List<AiTask> allTasks = aiTaskMapper.selectList(taskWrapper);
+            // 每个 shotId 只保留最新的任务
+            taskMap = allTasks.stream()
+                    .collect(Collectors.toMap(AiTask::getShotId, t -> t, (existing, replacement) -> existing));
+        }
+
+        final Map<Long, Asset> finalAssetMap = assetMap;
+        final Map<Long, AiTask> finalTaskMap = taskMap;
+        final List<ShotAssetRef> finalRefs = allRefs;
+
+        // 按 shotId 分组资产关联
+        Map<Long, List<ShotAssetRef>> refsByShot = finalRefs.stream()
+                .collect(Collectors.groupingBy(ShotAssetRef::getShotId));
+
+        // 转换为 VO
+        List<ShotVO> voList = shots.stream()
+                .map(shot -> toShotVO(shot, refsByShot, finalAssetMap, finalTaskMap))
+                .toList();
 
         PageResult<ShotVO> result = new PageResult<>();
         result.setList(voList);
@@ -224,6 +221,23 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     // ============ 内部方法 ============
+
+    /**
+     * 查询项目并校验存在性和归属
+     */
+    private Project getProjectById(Long id) {
+        Project project = projectMapper.selectById(id);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        if (!project.getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
+        }
+
+        return project;
+    }
 
     /**
      * Project 转 VO
@@ -245,9 +259,12 @@ public class ProjectServiceImpl implements ProjectService {
     }
 
     /**
-     * Shot 转 VO，填充关联资产和当前AI任务
+     * Shot 转 VO，使用预加载的关联数据避免 N+1 查询
      */
-    private ShotVO toShotVO(Shot shot, Long projectId) {
+    private ShotVO toShotVO(Shot shot,
+                            Map<Long, List<ShotAssetRef>> refsByShot,
+                            Map<Long, Asset> assetMap,
+                            Map<Long, AiTask> taskMap) {
         ShotVO vo = new ShotVO();
         vo.setId(shot.getId());
         vo.setSceneId(shot.getSceneId());
@@ -261,25 +278,19 @@ public class ProjectServiceImpl implements ProjectService {
         vo.setVersion(shot.getVersion());
         vo.setGenerationAttempts(shot.getGenerationAttempts());
 
-        // 查询关联资产
-        LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
-        refWrapper.eq(ShotAssetRef::getShotId, shot.getId());
-        List<ShotAssetRef> refs = shotAssetRefMapper.selectList(refWrapper);
-
-        if (!refs.isEmpty()) {
+        // 填充关联资产
+        List<ShotAssetRef> refs = refsByShot.get(shot.getId());
+        if (refs != null && !refs.isEmpty()) {
             List<ShotAssetRefVO> assetRefVOs = new ArrayList<>();
             for (ShotAssetRef ref : refs) {
                 ShotAssetRefVO refVO = new ShotAssetRefVO();
                 refVO.setAssetId(ref.getAssetId());
                 refVO.setAssetType(ref.getAssetType());
 
-                // 查询资产名称和主图
-                Asset asset = assetMapper.selectById(ref.getAssetId());
+                Asset asset = assetMap.get(ref.getAssetId());
                 if (asset != null) {
                     refVO.setAssetName(asset.getName());
-                    // 主图是 reference_images JSON 数组的第一个元素
                     if (asset.getReferenceImages() != null) {
-                        // 简化处理：直接使用 JSON 字符串
                         refVO.setPrimaryImage(asset.getReferenceImages());
                     }
                 }
@@ -288,12 +299,8 @@ public class ProjectServiceImpl implements ProjectService {
             vo.setAssetRefs(assetRefVOs);
         }
 
-        // 查询当前分镜最新的 AI 任务
-        LambdaQueryWrapper<AiTask> taskWrapper = new LambdaQueryWrapper<>();
-        taskWrapper.eq(AiTask::getShotId, shot.getId())
-                   .orderByDesc(AiTask::getId)
-                   .last("LIMIT 1");
-        AiTask latestTask = aiTaskMapper.selectOne(taskWrapper);
+        // 填充最新 AI 任务
+        AiTask latestTask = taskMap.get(shot.getId());
         if (latestTask != null) {
             ShotAiTaskVO taskVO = new ShotAiTaskVO();
             taskVO.setTaskId(latestTask.getId());
@@ -316,7 +323,7 @@ public class ProjectServiceImpl implements ProjectService {
         List<Episode> episodes = episodeMapper.selectList(epWrapper);
 
         if (episodes.isEmpty()) {
-            return List.of(-1L); // 返回不存在的ID，使 in 查询返回空
+            return List.of(-1L);
         }
 
         List<Long> episodeIds = episodes.stream()

@@ -7,8 +7,8 @@
       <div class="project-basic-info">
         <h2 class="project-name text-neon">{{ projectInfo?.name }}</h2>
         <div class="project-meta">
-          <span class="status-tag">
-            {{ projectInfo?.status === 0 ? '草稿' : projectInfo?.status === 1 ? '进行中' : '已完成' }}
+          <span class="status-tag" :class="projectStatusClass">
+            {{ projectStatusLabel }}
           </span>
           <span v-if="projectInfo?.executionLock" class="lock-tag">
             <el-icon><Lock /></el-icon>
@@ -46,28 +46,71 @@
     <div class="tab-content">
       <router-view />
     </div>
+
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑项目"
+      width="520px"
+      destroy-on-close
+    >
+      <el-form ref="editFormRef" :model="editForm" :rules="editRules" label-width="82px">
+        <el-form-item label="项目名称" prop="name">
+          <el-input v-model="editForm.name" maxlength="200" show-word-limit />
+        </el-form-item>
+        <el-form-item label="项目描述">
+          <el-input
+            v-model="editForm.description"
+            type="textarea"
+            :rows="4"
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editDialogVisible = false">取消</el-button>
+        <el-button class="btn-gradient" :loading="editLoading" @click="submitEditProject">
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Lock, Calendar, Edit, Picture, Grid, Film, DataAnalysis } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import dayjs from 'dayjs'
-import { useProjectStore } from '@/stores/project'
 import { projectApi } from '@/api/project'
 import type { ProjectVO } from '@/types'
+import { PROJECT_STATUS_MAP } from '@/constants/status'
 
 const route = useRoute()
 const router = useRouter()
-const projectStore = useProjectStore()
 
 // 状态变量
 const loading = ref(false)
 const projectInfo = ref<ProjectVO | null>(null)
 // 当前激活的 Tab（根据路由名称同步）
 const activeTab = ref<string>(route.name as string)
+const editDialogVisible = ref(false)
+const editLoading = ref(false)
+const editFormRef = ref<FormInstance>()
+
+const editForm = reactive({
+  name: '',
+  description: ''
+})
+
+const editRules: FormRules = {
+  name: [
+    { required: true, message: '请输入项目名称', trigger: 'blur' },
+    { min: 1, max: 200, message: '长度在 1 到 200 个字符', trigger: 'blur' }
+  ]
+}
 
 // Tab列表
 const tabList = [
@@ -76,6 +119,16 @@ const tabList = [
   { name: 'ShotWorkbench', label: '分镜工作台', icon: Film },
   { name: 'ApiCost', label: 'API 消耗', icon: DataAnalysis }
 ]
+
+const projectStatusLabel = computed(() => {
+  if (projectInfo.value?.status === undefined) return '加载中'
+  return PROJECT_STATUS_MAP[projectInfo.value.status]?.label || '未知'
+})
+
+const projectStatusClass = computed(() => {
+  if (projectInfo.value?.status === undefined) return 'status-unknown'
+  return `status-${projectInfo.value.status}`
+})
 
 // 加载项目详情
 const fetchProjectDetail = async (id: number) => {
@@ -96,8 +149,31 @@ const fetchProjectDetail = async (id: number) => {
 
 // 编辑项目
 const handleEditProject = () => {
-  // TODO: 打开编辑弹窗，复用项目列表的编辑逻辑
-  ElMessage.info('编辑功能开发中')
+  if (!projectInfo.value) return
+  editForm.name = projectInfo.value.name
+  editForm.description = projectInfo.value.description || ''
+  editDialogVisible.value = true
+}
+
+const submitEditProject = async () => {
+  if (!projectInfo.value) return
+  const valid = await editFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+
+  editLoading.value = true
+  try {
+    await projectApi.update(projectInfo.value.id, {
+      name: editForm.name.trim(),
+      description: editForm.description.trim()
+    })
+    ElMessage.success('项目已更新')
+    editDialogVisible.value = false
+    await fetchProjectDetail(projectInfo.value.id)
+  } catch {
+    ElMessage.error('编辑项目失败')
+  } finally {
+    editLoading.value = false
+  }
 }
 
 // Tab 切换时同步路由（TabPaneName 可能是 string | number）
@@ -136,6 +212,10 @@ watch(() => route.params.id, (newId) => {
     fetchProjectDetail(id)
   }
 })
+
+watch(() => route.name, (name) => {
+  activeTab.value = String(name || '')
+}, { immediate: true })
 </script>
 
 <style scoped lang="scss">
@@ -177,17 +257,21 @@ watch(() => route.params.id, (newId) => {
 
     .status-tag {
       padding: 6px 14px;
-      border-radius: 20px;
+      border-radius: 8px;
       font-size: 12px;
       color: #fff;
       backdrop-filter: blur(8px);
-      &:contains('草稿') {
+      background: rgba(144, 147, 153, 0.8);
+
+      &.status-0 {
         background: rgba(144, 147, 153, 0.8);
       }
-      &:contains('进行中') {
+
+      &.status-1 {
         background: rgba(64, 158, 255, 0.8);
       }
-      &:contains('已完成') {
+
+      &.status-2 {
         background: rgba(103, 194, 58, 0.8);
       }
     }

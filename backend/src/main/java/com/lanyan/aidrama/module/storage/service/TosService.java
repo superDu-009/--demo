@@ -12,14 +12,16 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import java.io.InputStream;
 import java.io.IOException;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
 import java.util.UUID;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -42,6 +44,15 @@ public class TosService {
 
     // 预签名URL默认有效期：1小时
     private static final long DEFAULT_EXPIRE_SECONDS = 3600L;
+
+    // 从URL上传时的最大文件大小限制：100MB
+    private static final int MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024;
+
+    // HTTP连接超时时间：30秒
+    private static final int CONNECT_TIMEOUT = 30000;
+
+    // HTTP读取超时时间：5分钟
+    private static final int READ_TIMEOUT = 300000;
 
     /**
      * 生成PUT预签名上传URL
@@ -76,7 +87,7 @@ public class TosService {
                 }
             }
             // 3. 生成8位随机数字
-            int randomNum = new Random().nextInt(100000000);
+            int randomNum = ThreadLocalRandom.current().nextInt(100000000);
             String randomStr = String.format("%08d", randomNum);
             // 4. 原文件名转义特殊字符
             String encodedFileName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
@@ -179,14 +190,50 @@ public class TosService {
      * @return 公开访问URL
      */
     public String uploadFromUrl(String sourceUrl, String targetKey) {
-        try {
-            // 下载URL内容
-            byte[] data = URI.create(sourceUrl).toURL().openStream().readAllBytes();
+        try (InputStream in = openConnectionWithTimeout(sourceUrl)) {
+            byte[] data = in.readNBytes(MAX_DOWNLOAD_SIZE);
+            if (data.length >= MAX_DOWNLOAD_SIZE) {
+                throw new TosException(51103, "下载源文件失败：文件大小超过100MB限制");
+            }
             return uploadFromBytes(data, targetKey);
+        } catch (TosException e) {
+            throw e;
         } catch (IOException e) {
             log.error("从URL下载文件失败，sourceUrl: {}", sourceUrl, e);
             throw new TosException(51103, "下载源文件失败：" + e.getMessage());
         }
+    }
+
+    /**
+     * 打开带超时的HTTP连接
+     */
+    private InputStream openConnectionWithTimeout(String sourceUrl) throws IOException {
+        HttpURLConnection connection = (HttpURLConnection) URI.create(sourceUrl).toURL().openConnection();
+        connection.setConnectTimeout(CONNECT_TIMEOUT);
+        connection.setReadTimeout(READ_TIMEOUT);
+        connection.setRequestMethod("GET");
+
+        int responseCode = connection.getResponseCode();
+        if (responseCode < 200 || responseCode >= 300) {
+            throw new IOException("HTTP " + responseCode + " from " + sourceUrl);
+        }
+
+        String contentType = connection.getContentType();
+        if (contentType != null && !isValidContentType(contentType)) {
+            throw new IOException("不支持的内容类型: " + contentType);
+        }
+
+        return connection.getInputStream();
+    }
+
+    /**
+     * 校验内容类型是否允许下载
+     */
+    private boolean isValidContentType(String contentType) {
+        return contentType.startsWith("image/")
+                || contentType.startsWith("video/")
+                || contentType.startsWith("text/")
+                || contentType.startsWith("application/");
     }
 
     /**

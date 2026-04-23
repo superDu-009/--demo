@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
 import com.lanyan.aidrama.common.PageResult;
+import com.lanyan.aidrama.common.AssetStatus;
 import com.lanyan.aidrama.entity.*;
 import com.lanyan.aidrama.mapper.*;
 import com.lanyan.aidrama.module.asset.dto.*;
@@ -15,7 +16,9 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -74,7 +77,7 @@ public class AssetServiceImpl implements AssetService {
         asset.setDescription(req.getDescription());
         asset.setReferenceImages(req.getReferenceImages());
         asset.setStylePreset(req.getStylePreset());
-        asset.setStatus(0); // 默认草稿
+        asset.setStatus(AssetStatus.DRAFT); // 默认草稿
 
         assetMapper.insert(asset);
         log.info("创建资产成功, assetId: {}, projectId: {}", asset.getId(), projectId);
@@ -132,7 +135,7 @@ public class AssetServiceImpl implements AssetService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        asset.setStatus(1); // 已确认
+        asset.setStatus(AssetStatus.CONFIRMED);
         assetMapper.updateById(asset);
         log.info("确认资产成功, assetId: {}", id);
     }
@@ -151,23 +154,47 @@ public class AssetServiceImpl implements AssetService {
 
         IPage<ShotAssetRef> refPage = shotAssetRefMapper.selectPage(pageParam, refWrapper);
 
-        // 转换为 ShotReferenceVO，需要查询 scene 和 episode
-        List<ShotReferenceVO> voList = refPage.getRecords().stream()
+        List<ShotAssetRef> refs = refPage.getRecords();
+        if (refs.isEmpty()) {
+            PageResult<ShotReferenceVO> result = new PageResult<>();
+            result.setList(List.of());
+            result.setTotal(refPage.getTotal());
+            result.setPage((int) refPage.getCurrent());
+            result.setSize((int) refPage.getSize());
+            result.setHasNext(false);
+            return result;
+        }
+
+        // 批量查询分镜，避免 N+1
+        List<Long> shotIds = refs.stream()
+                .map(ShotAssetRef::getShotId)
+                .distinct()
+                .toList();
+        Map<Long, Shot> shotMap = shotMapper.selectBatchIds(shotIds).stream()
+                .collect(Collectors.toMap(Shot::getId, s -> s));
+
+        // 批量查询分场，避免 N+1
+        List<Long> sceneIds = shotMap.values().stream()
+                .map(Shot::getSceneId)
+                .distinct()
+                .toList();
+        Map<Long, Scene> sceneMap = sceneMapper.selectBatchIds(sceneIds).stream()
+                .collect(Collectors.toMap(Scene::getId, s -> s));
+
+        List<ShotReferenceVO> voList = refs.stream()
                 .map(ref -> {
                     ShotReferenceVO vo = new ShotReferenceVO();
                     vo.setShotId(ref.getShotId());
 
-                    // 查询分镜获取 sceneId
-                    Shot shot = shotMapper.selectById(ref.getShotId());
+                    Shot shot = shotMap.get(ref.getShotId());
                     if (shot != null) {
                         vo.setSceneId(shot.getSceneId());
+                        vo.setShotStatus(shot.getStatus());
 
-                        // 查询分场获取 episodeId
-                        Scene scene = sceneMapper.selectById(shot.getSceneId());
+                        Scene scene = sceneMap.get(shot.getSceneId());
                         if (scene != null) {
                             vo.setEpisodeId(scene.getEpisodeId());
                         }
-                        vo.setShotStatus(shot.getStatus());
                     }
                     return vo;
                 })

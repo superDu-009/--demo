@@ -16,27 +16,25 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Folder, Picture, Film, DataAnalysis, Plus } from '@element-plus/icons-vue'
+import { Folder, Picture, Film, DataAnalysis } from '@element-plus/icons-vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   type?: 'default' | 'project' | 'asset' | 'shot' | 'stat'
   title?: string
   description?: string
   showAction?: boolean
   actionText?: string
-}>()
-
-const emit = defineEmits<{
-  action: []
-}>()
-
-const defaultProps = withDefaults(props, {
+}>(), {
   type: 'default',
   title: '暂无数据',
   description: '快去创建第一条内容吧~',
   showAction: false,
   actionText: '立即创建'
 })
+
+const emit = defineEmits<{
+  action: []
+}>()
 
 // 图标映射
 const iconComponent = computed(() => {
