@@ -3,8 +3,12 @@
   <div class="asset-card card-glass border-neon">
     <!-- 资产封面 -->
     <div class="asset-cover">
+      <div v-if="isVoiceAsset && audioUrl" class="audio-cover">
+        <el-icon :size="42"><Microphone /></el-icon>
+        <audio :src="audioUrl" controls preload="none" />
+      </div>
       <img 
-        v-if="asset.referenceImages && asset.referenceImages.length > 0" 
+        v-else-if="asset.referenceImages && asset.referenceImages.length > 0" 
         :src="asset.referenceImages[0]" 
         alt="资产封面"
         class="cover-img"
@@ -47,7 +51,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Picture } from '@element-plus/icons-vue'
+import { Microphone, Picture } from '@element-plus/icons-vue'
+import { AssetType } from '@/types'
 import type { AssetVO } from '@/types'
 import { ASSET_STATUS_MAP } from '@/constants/status'
 
@@ -62,6 +67,8 @@ const emit = defineEmits<{
 }>()
 
 const statusLabel = computed(() => ASSET_STATUS_MAP[props.asset.status]?.label || '未知')
+const isVoiceAsset = computed(() => props.asset.assetType === AssetType.Voice)
+const audioUrl = computed(() => String(props.asset.stylePreset?.audioUrl || ''))
 
 // 资产类型标签文本
 const typeLabel = computed(() => {
@@ -118,6 +125,23 @@ const tagType = computed(() => {
     align-items: center;
     justify-content: center;
     color: $text-tertiary;
+  }
+
+  .audio-cover {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 16px;
+    color: $accent-green;
+    background: rgba(34, 211, 238, 0.06);
+
+    audio {
+      width: 100%;
+      height: 32px;
+    }
   }
 
   .status-tag {

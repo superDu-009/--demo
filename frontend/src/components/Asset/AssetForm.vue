@@ -34,7 +34,7 @@
       />
     </el-form-item>
 
-    <el-form-item label="参考图">
+    <el-form-item v-if="form.assetType !== AssetType.Voice" label="参考图">
       <div class="reference-list">
         <div
           v-for="(url, index) in form.referenceImages"
@@ -54,18 +54,63 @@
           </el-button>
         </div>
 
-        <div class="reference-input">
-          <el-input
-            v-model="referenceUrl"
-            placeholder="粘贴参考图 URL，回车添加"
-            clearable
-            @keyup.enter="addReference"
-          />
-          <el-button @click="addReference">
-            <el-icon><Plus /></el-icon>
-            添加
-          </el-button>
-        </div>
+        <TosUpload
+          class="reference-uploader"
+          :model-value="uploadTempUrl"
+          :project-id="projectId"
+          file-type="asset"
+          :project-dir="`projects/${projectId}/assets`"
+          button-text="上传参考图"
+          tip-text="支持 png/jpg/webp，单张最大10MB"
+          accept=".png,.jpg,.jpeg,.webp"
+          :allowed-types="['image/png', 'image/jpeg', 'image/webp']"
+          :max-file-size="10 * 1024 * 1024"
+          :show-preview="false"
+          @success="addUploadedReference"
+          @update:model-value="uploadTempUrl = $event"
+        />
+      </div>
+    </el-form-item>
+
+    <el-form-item v-else label="声音文件">
+      <div class="audio-field">
+        <TosUpload
+          v-model="audioUrl"
+          :project-id="projectId"
+          file-type="asset"
+          :project-dir="`projects/${projectId}/assets/voice`"
+          button-text="上传声音资产"
+          tip-text="支持 mp3/wav/m4a，单文件最大30MB"
+          accept=".mp3,.wav,.m4a,.aac"
+          :allowed-types="['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/aac']"
+          :max-file-size="30 * 1024 * 1024"
+          :show-preview="false"
+        />
+        <audio
+          v-if="audioUrl"
+          class="audio-preview"
+          :src="audioUrl"
+          controls
+          preload="none"
+        />
+        <el-button v-if="audioUrl" type="danger" plain @click="audioUrl = ''">
+          清除声音
+        </el-button>
+      </div>
+    </el-form-item>
+
+    <el-form-item label="备用链接">
+      <div class="reference-input">
+        <el-input
+          v-model="manualUrl"
+          :placeholder="form.assetType === AssetType.Voice ? '粘贴音频 URL，回车添加' : '粘贴参考图 URL，回车添加'"
+          clearable
+          @keyup.enter="addManualUrl"
+        />
+        <el-button @click="addManualUrl">
+          <el-icon><Plus /></el-icon>
+          添加
+        </el-button>
       </div>
     </el-form-item>
 
@@ -85,6 +130,7 @@ import { reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Close, Plus } from '@element-plus/icons-vue'
+import TosUpload from '@/components/Common/TosUpload.vue'
 import { AssetType } from '@/types'
 import type { AssetCreateRequest, AssetUpdateRequest, AssetVO } from '@/types'
 
@@ -100,14 +146,18 @@ const props = withDefaults(defineProps<{
   mode?: 'create' | 'edit'
   asset?: AssetVO | null
   defaultType?: AssetType | 'all'
+  projectId?: number
 }>(), {
   mode: 'create',
   asset: null,
-  defaultType: AssetType.Character
+  defaultType: AssetType.Character,
+  projectId: 0
 })
 
 const formRef = ref<FormInstance>()
-const referenceUrl = ref('')
+const manualUrl = ref('')
+const uploadTempUrl = ref('')
+const audioUrl = ref('')
 
 const assetTypeOptions = [
   { label: '角色', value: AssetType.Character },
@@ -123,7 +173,8 @@ const form = reactive<AssetFormState>({
   referenceImages: [],
   stylePreset: {
     artStyle: '',
-    colorTone: ''
+    colorTone: '',
+    audioUrl: ''
   }
 })
 
@@ -141,8 +192,10 @@ const resetForm = () => {
   form.name = ''
   form.description = ''
   form.referenceImages = []
-  form.stylePreset = { artStyle: '', colorTone: '' }
-  referenceUrl.value = ''
+  form.stylePreset = { artStyle: '', colorTone: '', audioUrl: '' }
+  manualUrl.value = ''
+  uploadTempUrl.value = ''
+  audioUrl.value = ''
   formRef.value?.clearValidate()
 }
 
@@ -154,9 +207,12 @@ const fillForm = (asset: AssetVO) => {
   form.stylePreset = {
     artStyle: asset.stylePreset?.artStyle || '',
     colorTone: asset.stylePreset?.colorTone || '',
+    audioUrl: asset.stylePreset?.audioUrl || '',
     ...asset.stylePreset
   }
-  referenceUrl.value = ''
+  audioUrl.value = String(asset.stylePreset?.audioUrl || '')
+  manualUrl.value = ''
+  uploadTempUrl.value = ''
   formRef.value?.clearValidate()
 }
 
@@ -172,16 +228,28 @@ watch(
   { immediate: true }
 )
 
-const addReference = () => {
-  const url = referenceUrl.value.trim()
+const addUploadedReference = (url: string) => {
+  if (!url) return
+  if (!form.referenceImages) form.referenceImages = []
+  form.referenceImages.push(url)
+  uploadTempUrl.value = ''
+}
+
+const addManualUrl = () => {
+  const url = manualUrl.value.trim()
   if (!url) return
   if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) {
-    ElMessage.warning('请填写有效的图片 URL')
+    ElMessage.warning('请填写有效的资源 URL')
+    return
+  }
+  if (form.assetType === AssetType.Voice) {
+    audioUrl.value = url
+    manualUrl.value = ''
     return
   }
   if (!form.referenceImages) form.referenceImages = []
   form.referenceImages.push(url)
-  referenceUrl.value = ''
+  manualUrl.value = ''
 }
 
 const removeReference = (index: number) => {
@@ -190,6 +258,9 @@ const removeReference = (index: number) => {
 
 const normalizeStylePreset = () => {
   const stylePreset = { ...(form.stylePreset || {}) }
+  if (form.assetType === AssetType.Voice && audioUrl.value) {
+    stylePreset.audioUrl = audioUrl.value
+  }
   Object.keys(stylePreset).forEach((key) => {
     if (stylePreset[key] === '') delete stylePreset[key]
   })
@@ -204,7 +275,7 @@ const validate = async (): Promise<AssetCreateRequest | AssetUpdateRequest | fal
     assetType: form.assetType,
     name: form.name.trim(),
     description: form.description?.trim() || undefined,
-    referenceImages: form.referenceImages?.filter(Boolean),
+    referenceImages: form.assetType === AssetType.Voice ? [] : form.referenceImages?.filter(Boolean),
     stylePreset: normalizeStylePreset()
   }
 
@@ -263,6 +334,21 @@ defineExpose({ validate, resetForm })
   grid-column: 1 / -1;
   display: flex;
   gap: 10px;
+}
+
+.reference-uploader {
+  grid-column: 1 / -1;
+}
+
+.audio-field {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.audio-preview {
+  width: 100%;
 }
 
 .style-grid {

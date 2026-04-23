@@ -1,277 +1,282 @@
-<!-- views/tabs/WorkflowEditor.vue — 流程编辑器页面 -->
 <template>
   <div class="workflow-editor-page">
-    <!-- 顶部操作栏 -->
-    <div class="top-bar card-glass">
-      <div class="bar-left">
-        <h3 class="bar-title">工作流配置</h3>
-        <el-tag type="warning" v-if="isRunning">执行中</el-tag>
-        <el-tag type="success" v-else>可编辑</el-tag>
+    <div class="top-bar card-glass border-neon">
+      <div>
+        <p class="eyebrow">Pipeline Builder</p>
+        <h3>工作流配置</h3>
+        <span>拖拽调整步骤顺序，保存结构后可直接替换为真实接口执行。</span>
       </div>
-      <div class="bar-right">
-        <el-button @click="saveWorkflow" :loading="saving">保存配置</el-button>
-        <el-button class="btn-gradient" @click="startWorkflow" :loading="starting" :disabled="isRunning">
+      <div class="bar-actions">
+        <el-button :loading="saving" @click="saveWorkflow">保存配置</el-button>
+        <el-button class="btn-gradient" :loading="starting" :disabled="isRunning" @click="startWorkflow">
           开始执行
         </el-button>
-        <el-button type="danger" @click="stopWorkflow" :disabled="!isRunning">终止</el-button>
+        <el-button type="danger" :disabled="!isRunning" @click="stopWorkflow">终止</el-button>
       </div>
     </div>
 
-    <!-- 执行进度面板 -->
-    <div class="progress-panel card-glass" v-if="isRunning">
-      <div class="progress-header">
-        <h4>执行进度</h4>
-        <span class="progress-text">{{ overallProgress }}%</span>
-      </div>
-      <el-progress :percentage="overallProgress" :show-text="false" :stroke-width="12" />
-      <p class="progress-desc">{{ currentStepDesc }}</p>
-    </div>
+    <WorkflowProgress
+      :running="isRunning"
+      :progress="workflowStatus.overallProgress"
+      :current-detail="currentDetail"
+      :estimated-remaining-seconds="workflowStatus.estimatedRemainingSeconds"
+    />
 
-    <!-- 步骤卡片列表 -->
-    <div class="step-list">
-      <div 
-        v-for="(step, index) in workflowSteps" 
-        :key="step.id"
-        class="step-card card-glass"
-        :class="{ 'step-running': step.status === 'running', 'step-success': step.status === 'success', 'step-error': step.status === 'error', 'step-disabled': !step.enabled }"
-      >
-        <div class="step-header">
-          <div class="step-info">
-            <el-icon :size="24" class="step-icon"><component :is="step.icon" /></el-icon>
-            <div>
-              <h4 class="step-name">{{ step.name }}</h4>
-              <p class="step-desc">{{ step.description }}</p>
-            </div>
-          </div>
-          <div class="step-actions">
-            <el-switch v-model="step.enabled" :disabled="isRunning" />
-          </div>
-        </div>
+    <div class="editor-grid">
+      <section class="step-section">
+        <draggable
+          v-model="workflowSteps"
+          item-key="stepType"
+          handle=".drag-handle"
+          ghost-class="sortable-ghost"
+          chosen-class="sortable-chosen"
+          :animation="180"
+          :disabled="isRunning"
+        >
+          <template #item="{ element, index }">
+            <WorkflowNode
+              :model-value="element"
+              :meta="getStepMeta(element.stepType)"
+              :disabled="isRunning"
+              @update:model-value="updateStep(index, $event)"
+            />
+          </template>
+        </draggable>
+      </section>
 
-        <div class="step-config" v-if="step.configurable && step.enabled">
-          <el-form label-width="100px">
-            <el-form-item label="需要审核">
-              <el-switch v-model="step.needReview" :disabled="isRunning" />
-            </el-form-item>
-            <el-form-item v-if="step.extraConfig" label="配置参数">
-              <el-input v-model="step.configValue" placeholder="请输入配置参数" :disabled="isRunning" />
-            </el-form-item>
-          </el-form>
+      <aside class="status-section card-glass border-neon">
+        <div class="status-head">
+          <p class="eyebrow">Status</p>
+          <h4>执行状态</h4>
         </div>
-
-        <!-- 执行状态 -->
-        <div class="step-status" v-if="step.status === 'running'">
-          <span class="running-text">执行中...</span>
-          <el-progress type="circle" :percentage="step.progress" :width="32" />
-        </div>
-        <div class="step-status success" v-if="step.status === 'success'">
-          <el-icon :size="20" class="success-icon"><Check /></el-icon>
-          <span>执行成功</span>
-        </div>
-        <div class="step-status error" v-if="step.status === 'error'">
-          <el-icon :size="20" class="error-icon"><Close /></el-icon>
-          <span>执行失败：{{ step.errorMsg }}</span>
-        </div>
-
-        <!-- 拖拽手柄 -->
-        <div class="drag-handle" v-if="!isRunning">
-          <el-icon :size="20"><Rank /></el-icon>
-        </div>
-      </div>
+        <WorkflowStatus :steps="workflowStatus.steps" :step-name-map="stepNameMap" />
+      </aside>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import draggable from 'vuedraggable'
 import { ElMessage } from 'element-plus'
 import {
-  Upload, Search, Edit, Picture, Film, Folder, Rank, Check, Close
+  Upload, Search, Edit, Picture, Film, Folder
 } from '@element-plus/icons-vue'
+import WorkflowNode from '@/components/Workflow/WorkflowNode.vue'
+import WorkflowProgress from '@/components/Workflow/WorkflowProgress.vue'
+import WorkflowStatus from '@/components/Workflow/WorkflowStatus.vue'
+import { StepType, WorkflowTaskStatus } from '@/types'
+import type { WorkflowStep, WorkflowStatusVO } from '@/types'
 
-// 工作流步骤数据
-const workflowSteps = reactive([
-  {
-    id: 1,
+const stepMeta = {
+  import: {
     name: '导入并拆分剧本',
-    description: '解析上传的小说文件，自动拆分章节和场景',
-    icon: Upload,
-    enabled: true,
-    configurable: true,
-    needReview: false,
-    extraConfig: false,
-    configValue: '',
-    status: '', // running / success / error
-    progress: 0,
-    errorMsg: ''
+    description: '解析上传的小说文件，自动拆分章节和场景。',
+    icon: Upload
   },
-  {
-    id: 2,
+  asset_extract: {
     name: '资产提取',
-    description: 'AI自动提取小说中的角色、场景、道具等资产',
-    icon: Search,
-    enabled: true,
-    configurable: true,
-    needReview: true,
-    extraConfig: false,
-    configValue: '',
-    status: '',
-    progress: 0,
-    errorMsg: ''
+    description: 'AI 自动提取角色、场景、道具与声音资产。',
+    icon: Search
   },
-  {
-    id: 3,
+  shot_gen: {
     name: '分镜提示词生成',
-    description: '根据场景内容生成中英文AI绘画提示词',
+    description: '根据分场内容生成中英文分镜提示词。',
     icon: Edit,
-    enabled: true,
-    configurable: true,
-    needReview: true,
-    extraConfig: true,
-    configValue: '动漫风格，赛博朋克背景',
-    status: '',
-    progress: 0,
-    errorMsg: ''
+    configKey: 'stylePrompt',
+    configPlaceholder: '例如：动漫风格，强对比霓虹光'
   },
-  {
-    id: 4,
-    name: '图片生成',
-    description: '调用AI绘画接口批量生成所有分镜图片',
+  image_gen: {
+    name: '首帧生图',
+    description: '根据提示词和资产参考图生成分镜首帧。',
     icon: Picture,
-    enabled: true,
-    configurable: true,
-    needReview: true,
-    extraConfig: true,
-    configValue: 'SD3模型，768*1344分辨率',
-    status: '',
-    progress: 0,
-    errorMsg: ''
+    configKey: 'imageModel',
+    configPlaceholder: '例如：SD3 / Seedream'
   },
-  {
-    id: 5,
+  video_gen: {
     name: '视频生成',
-    description: '根据分镜图片生成连贯的动画视频',
+    description: '基于首帧生成短视频镜头。',
     icon: Film,
-    enabled: true,
-    configurable: true,
-    needReview: true,
-    extraConfig: true,
-    configValue: '24fps，镜头平移',
-    status: '',
-    progress: 0,
-    errorMsg: ''
+    configKey: 'videoModel',
+    configPlaceholder: '例如：Seedance，24fps'
   },
-  {
-    id: 6,
+  export: {
     name: '合并导出',
-    description: '把所有分镜视频合并成完整的动画作品',
-    icon: Folder,
-    enabled: true,
-    configurable: true,
-    needReview: false,
-    extraConfig: false,
-    configValue: '',
-    status: '',
-    progress: 0,
-    errorMsg: ''
+    description: '合并已通过镜头并生成最终成片。',
+    icon: Folder
   }
+} satisfies Record<StepType, any>
+
+const stepNameMap = Object.entries(stepMeta).reduce<Record<string, string>>((result, [key, value]) => {
+  result[key] = value.name
+  return result
+}, {})
+
+const getStepMeta = (stepType: StepType) => stepMeta[stepType]
+
+const workflowSteps = ref<WorkflowStep[]>([
+  { stepType: 'import', enabled: true, review: false, config: {} },
+  { stepType: 'asset_extract', enabled: true, review: true, config: {} },
+  { stepType: 'shot_gen', enabled: true, review: true, config: { stylePrompt: '动漫风格，赛博朋克背景' } },
+  { stepType: 'image_gen', enabled: true, review: true, config: { imageModel: 'Seedream，768x1344' } },
+  { stepType: 'video_gen', enabled: true, review: true, config: { videoModel: 'Seedance，24fps' } },
+  { stepType: 'export', enabled: true, review: false, config: {} }
 ])
 
-// 状态
-const isRunning = ref(false)
 const saving = ref(false)
 const starting = ref(false)
-const overallProgress = ref(0)
-const currentStepDesc = ref('等待执行...')
+const isRunning = ref(false)
+let runTimer: number | null = null
 
-// 保存配置
+const workflowStatus = reactive<WorkflowStatusVO>({
+  executionLock: 0,
+  currentStep: null,
+  currentEpisodeId: null,
+  currentEpisodeTitle: null,
+  totalEpisodes: 0,
+  overallProgress: 0,
+  totalShots: 0,
+  processedShots: 0,
+  estimatedRemainingSeconds: 0,
+  steps: workflowSteps.value.map((step, index) => ({
+    stepType: step.stepType,
+    stepOrder: index + 1,
+    status: WorkflowTaskStatus.NotStarted,
+    progress: 0,
+    currentDetail: '未执行',
+    errorMsg: null,
+    reviewComment: null
+  }))
+})
+
+const currentDetail = computed(() => {
+  const current = workflowStatus.steps.find(step => step.status === WorkflowTaskStatus.Running)
+  return current?.currentDetail || (isRunning.value ? '准备执行' : '等待执行')
+})
+
+const syncStatusSteps = () => {
+  workflowStatus.steps = workflowSteps.value.map((step, index) => {
+    const old = workflowStatus.steps.find(item => item.stepType === step.stepType)
+    return {
+      stepType: step.stepType,
+      stepOrder: index + 1,
+      status: old?.status || WorkflowTaskStatus.NotStarted,
+      progress: old?.progress || 0,
+      currentDetail: old?.currentDetail || '未执行',
+      errorMsg: old?.errorMsg || null,
+      reviewComment: old?.reviewComment || null
+    }
+  })
+}
+
+const updateStep = (index: number, step: WorkflowStep) => {
+  workflowSteps.value[index] = step
+  syncStatusSteps()
+}
+
 const saveWorkflow = async () => {
   saving.value = true
   try {
-    // 模拟保存请求
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    ElMessage.success('配置保存成功')
-  } catch {
-    ElMessage.error('保存失败')
+    // 这里先保留前端 mock 保存，后续可替换为 projectApi.saveWorkflow(projectId, payload)。
+    const payload = {
+      workflowConfig: { steps: workflowSteps.value },
+      stylePreset: {}
+    }
+    console.info('[mock save workflow]', payload)
+    await new Promise(resolve => window.setTimeout(resolve, 500))
+    ElMessage.success('配置已保存')
   } finally {
     saving.value = false
   }
 }
 
-// 开始执行
 const startWorkflow = async () => {
   starting.value = true
   try {
-    await new Promise(resolve => setTimeout(resolve, 1000))
+    await new Promise(resolve => window.setTimeout(resolve, 400))
     isRunning.value = true
-    ElMessage.success('工作流开始执行')
-    // 模拟执行进度
-    simulateExecution()
-  } catch {
-    ElMessage.error('启动失败')
+    workflowStatus.executionLock = 1
+    workflowStatus.overallProgress = 0
+    workflowStatus.estimatedRemainingSeconds = 900
+    syncStatusSteps()
+    workflowStatus.steps.forEach(step => {
+      step.status = WorkflowTaskStatus.NotStarted
+      step.progress = 0
+      step.currentDetail = '等待执行'
+    })
+    runMockExecution()
+    ElMessage.success('工作流已开始执行')
   } finally {
     starting.value = false
   }
 }
 
-// 终止执行
 const stopWorkflow = () => {
+  if (runTimer) {
+    window.clearInterval(runTimer)
+    runTimer = null
+  }
   isRunning.value = false
-  workflowSteps.forEach(step => {
-    step.status = ''
-    step.progress = 0
+  workflowStatus.executionLock = 0
+  workflowStatus.currentStep = null
+  workflowStatus.estimatedRemainingSeconds = 0
+  workflowStatus.steps.forEach(step => {
+    if (step.status === WorkflowTaskStatus.Running) {
+      step.status = WorkflowTaskStatus.NotStarted
+      step.currentDetail = '已终止'
+    }
   })
-  overallProgress.value = 0
-  currentStepDesc.value = '已终止'
   ElMessage.info('工作流已终止')
 }
 
-// 模拟执行流程
-const simulateExecution = () => {
-  let currentStepIndex = 0
-  const stepCount = workflowSteps.filter(s => s.enabled).length
+const runMockExecution = () => {
+  const enabledSteps = workflowSteps.value.filter(step => step.enabled)
+  let activeIndex = 0
+  let activeProgress = 0
 
-  const executeNextStep = () => {
-    if (!isRunning.value || currentStepIndex >= workflowSteps.length) return
-    
-    const step = workflowSteps[currentStepIndex]
-    if (!step.enabled) {
-      currentStepIndex++
-      executeNextStep()
+  runTimer = window.setInterval(() => {
+    const active = enabledSteps[activeIndex]
+    if (!active) {
+      stopWorkflow()
+      workflowStatus.overallProgress = 100
+      workflowStatus.steps.forEach(step => {
+        if (step.status !== WorkflowTaskStatus.Success && workflowSteps.value.find(item => item.stepType === step.stepType)?.enabled) {
+          step.status = WorkflowTaskStatus.Success
+          step.progress = 100
+          step.currentDetail = '执行成功'
+        }
+      })
+      ElMessage.success('工作流执行完成')
       return
     }
 
-    step.status = 'running'
-    currentStepDesc.value = `正在执行：${step.name}`
-    let progress = 0
+    const statusStep = workflowStatus.steps.find(step => step.stepType === active.stepType)
+    if (!statusStep) return
 
-    const interval = setInterval(() => {
-      if (!isRunning.value) {
-        clearInterval(interval)
-        return
-      }
-      progress += 10
-      step.progress = progress
-      overallProgress.value = Math.round(((currentStepIndex + progress/100) / stepCount) * 100)
+    statusStep.status = WorkflowTaskStatus.Running
+    statusStep.currentDetail = `${stepNameMap[active.stepType]} - mock 执行中`
+    activeProgress += 10
+    statusStep.progress = Math.min(activeProgress, 100)
+    workflowStatus.currentStep = active.stepType
+    workflowStatus.overallProgress = Math.min(
+      100,
+      Math.round(((activeIndex + activeProgress / 100) / enabledSteps.length) * 100)
+    )
+    workflowStatus.estimatedRemainingSeconds = Math.max(0, workflowStatus.estimatedRemainingSeconds - 30)
 
-      if (progress >= 100) {
-        clearInterval(interval)
-        step.status = 'success'
-        currentStepIndex++
-        if (currentStepIndex >= stepCount) {
-          overallProgress.value = 100
-          currentStepDesc.value = '全部执行完成！'
-          isRunning.value = false
-          ElMessage.success('工作流执行完成')
-        } else {
-          executeNextStep()
-        }
-      }
-    }, 300)
-  }
-
-  executeNextStep()
+    if (activeProgress >= 100) {
+      statusStep.status = active.review ? WorkflowTaskStatus.WaitingReview : WorkflowTaskStatus.Success
+      statusStep.currentDetail = active.review ? '待人工审核' : '执行成功'
+      statusStep.progress = 100
+      activeIndex += 1
+      activeProgress = 0
+    }
+  }, 500)
 }
+
+onBeforeUnmount(() => {
+  if (runTimer) window.clearInterval(runTimer)
+})
 </script>
 
 <style scoped lang="scss">
@@ -279,186 +284,95 @@ const simulateExecution = () => {
   width: 100%;
 }
 
-// 顶部操作栏
 .top-bar {
   display: flex;
   justify-content: space-between;
+  gap: 18px;
   align-items: center;
   padding: 20px;
-  margin-bottom: 20px;
+  margin-bottom: 18px;
+  border-radius: 8px;
 
-  .bar-left {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    .bar-title {
-      font-size: 18px;
-      font-weight: 600;
-      margin: 0;
-      color: $text-primary;
-    }
+  .eyebrow {
+    margin: 0 0 6px;
+    color: $accent-green;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: uppercase;
   }
 
-  .bar-right {
-    display: flex;
-    gap: 12px;
-  }
-}
-
-// 进度面板
-.progress-panel {
-  padding: 20px;
-  margin-bottom: 20px;
-
-  .progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 12px;
-    h4 {
-      font-size: 16px;
-      font-weight: 600;
-      margin: 0;
-      color: $text-primary;
-    }
-    .progress-text {
-      font-weight: 600;
-      color: $primary-color;
-    }
+  h3 {
+    margin: 0;
+    color: $text-primary;
+    font-size: 20px;
   }
 
-  .progress-desc {
-    margin: 12px 0 0 0;
+  span {
+    display: block;
+    margin-top: 8px;
     color: $text-secondary;
-    font-size: 14px;
-  }
-
-  :deep(.el-progress-bar__outer) {
-    background: rgba(100, 108, 255, 0.1);
-    border-radius: 6px;
-  }
-
-  :deep(.el-progress-bar__inner) {
-    background: $primary-gradient;
-    border-radius: 6px;
+    font-size: 13px;
   }
 }
 
-// 步骤列表
-.step-list {
+.bar-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.editor-grid {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
-.step-card {
-  padding: 20px;
-  position: relative;
-  transition: all 0.3s ease;
+.step-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 
-  &.step-running {
-    border-color: $primary-color;
-    box-shadow: 0 0 20px rgba(100, 108, 255, 0.3);
-    animation: pulse 2s infinite;
-  }
-
-  &.step-success {
-    border-color: #10b981;
-    box-shadow: 0 0 20px rgba(16, 185, 129, 0.2);
-  }
-
-  &.step-error {
-    border-color: #ef4444;
-    box-shadow: 0 0 20px rgba(239, 68, 68, 0.2);
-  }
-
-  &.step-disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .step-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    .step-info {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      .step-icon {
-        background: $primary-gradient;
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-      }
-      .step-name {
-        font-size: 16px;
-        font-weight: 600;
-        color: $text-primary;
-        margin: 0 0 4px 0;
-      }
-      .step-desc {
-        font-size: 13px;
-        color: $text-secondary;
-        margin: 0;
-      }
-    }
-  }
-
-  .step-config {
-    margin-top: 16px;
-    padding-top: 16px;
-    border-top: 1px solid rgba(100, 108, 255, 0.1);
-  }
-
-  .step-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(100, 108, 255, 0.1);
-    color: $text-secondary;
-    font-size: 14px;
-
-    &.success {
-      color: #10b981;
-      .success-icon {
-        color: #10b981;
-      }
-    }
-
-    &.error {
-      color: #ef4444;
-      .error-icon {
-        color: #ef4444;
-      }
-    }
-  }
-
-  .drag-handle {
-    position: absolute;
-    right: 20px;
-    top: 50%;
-    transform: translateY(-50%);
-    cursor: grab;
-    color: $text-tertiary;
-    opacity: 0.5;
-    transition: opacity 0.3s ease;
-
-    &:hover {
-      opacity: 1;
-      color: $primary-color;
-    }
+  :deep(.workflow-node) {
+    margin-bottom: 12px;
   }
 }
 
-@keyframes pulse {
-  0%, 100% {
-    box-shadow: 0 0 20px rgba(100, 108, 255, 0.3), 0 8px 32px rgba(0, 0, 0, 0.3);
+.status-section {
+  padding: 18px;
+  border-radius: 8px;
+}
+
+.status-head {
+  margin-bottom: 14px;
+
+  .eyebrow {
+    margin: 0 0 6px;
+    color: $accent-green;
+    font-size: 12px;
+    letter-spacing: 0;
+    text-transform: uppercase;
   }
-  50% {
-    box-shadow: 0 0 30px rgba(100, 108, 255, 0.5), 0 8px 32px rgba(0, 0, 0, 0.3);
+
+  h4 {
+    margin: 0;
+    color: $text-primary;
+    font-size: 17px;
+  }
+}
+
+:deep(.sortable-ghost) {
+  opacity: 0.35;
+}
+
+:deep(.sortable-chosen) {
+  border-color: rgba(34, 211, 238, 0.72);
+}
+
+@media (max-width: 768px) {
+  .top-bar {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

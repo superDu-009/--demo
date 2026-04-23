@@ -89,6 +89,7 @@
         :mode="isEdit ? 'edit' : 'create'"
         :asset="currentEditAsset"
         :default-type="assetType"
+        :project-id="projectId"
       />
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>

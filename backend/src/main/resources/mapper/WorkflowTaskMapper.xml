@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lanyan.aidrama.mapper.WorkflowTaskMapper">
+
+    <!-- 查询项目最后一个执行中的流程任务 -->
+    <select id="selectLatestRunning" resultType="com.lanyan.aidrama.entity.WorkflowTask">
+        SELECT *
+        FROM workflow_task
+        WHERE project_id = #{projectId}
+          AND status = 1
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+    <!-- 查询项目特定步骤的流程任务 -->
+    <select id="selectByProjectAndStep" resultType="com.lanyan.aidrama.entity.WorkflowTask">
+        SELECT *
+        FROM workflow_task
+        WHERE project_id = #{projectId}
+          AND step_type = #{stepType}
+          <if test="episodeId != null">
+              AND episode_id = #{episodeId}
+          </if>
+          <if test="episodeId == null">
+              AND episode_id IS NULL
+          </if>
+        ORDER BY step_order ASC
+        LIMIT 1
+    </select>
+
+</mapper>

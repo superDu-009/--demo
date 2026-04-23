@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.lanyan.aidrama.mapper.ProjectMapper">
+
+    <!-- 更新项目执行锁状态 -->
+    <update id="updateExecutionLock">
+        UPDATE project
+        SET execution_lock = #{lockValue}
+        WHERE id = #{projectId}
+    </update>
+
+</mapper>

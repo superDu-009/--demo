@@ -8,6 +8,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppLayout: typeof import('./components/Layout/AppLayout.vue')['default']
+    AssetBindPanel: typeof import('./components/Shot/AssetBindPanel.vue')['default']
     AssetCard: typeof import('./components/Asset/AssetCard.vue')['default']
     AssetForm: typeof import('./components/Asset/AssetForm.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
@@ -15,9 +16,11 @@ declare module 'vue' {
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
+    ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCol: typeof import('element-plus/es')['ElCol']
     ElContainer: typeof import('element-plus/es')['ElContainer']
     ElDialog: typeof import('element-plus/es')['ElDialog']
+    ElDrawer: typeof import('element-plus/es')['ElDrawer']
     ElEmpty: typeof import('element-plus/es')['ElEmpty']
     ElForm: typeof import('element-plus/es')['ElForm']
     ElFormItem: typeof import('element-plus/es')['ElFormItem']
@@ -28,6 +31,8 @@ declare module 'vue' {
     ElMain: typeof import('element-plus/es')['ElMain']
     ElPagination: typeof import('element-plus/es')['ElPagination']
     ElProgress: typeof import('element-plus/es')['ElProgress']
+    ElRadioButton: typeof import('element-plus/es')['ElRadioButton']
+    ElRadioGroup: typeof import('element-plus/es')['ElRadioGroup']
     ElRow: typeof import('element-plus/es')['ElRow']
     ElSegmented: typeof import('element-plus/es')['ElSegmented']
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
@@ -38,7 +43,13 @@ declare module 'vue' {
     EmptyState: typeof import('./components/Common/EmptyState.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    ShotCard: typeof import('./components/Shot/ShotCard.vue')['default']
+    ShotPreview: typeof import('./components/Shot/ShotPreview.vue')['default']
+    ShotReviewDialog: typeof import('./components/Shot/ShotReviewDialog.vue')['default']
     TosUpload: typeof import('./components/Common/TosUpload.vue')['default']
+    WorkflowNode: typeof import('./components/Workflow/WorkflowNode.vue')['default']
+    WorkflowProgress: typeof import('./components/Workflow/WorkflowProgress.vue')['default']
+    WorkflowStatus: typeof import('./components/Workflow/WorkflowStatus.vue')['default']
   }
   export interface ComponentCustomProperties {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']
