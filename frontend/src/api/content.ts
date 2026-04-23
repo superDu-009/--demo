@@ -65,7 +65,7 @@ export const contentApi = {
 
   // 绑定资产：POST /api/shot/{shotId}/assets
   bindAsset: (shotId: number, data: { assetId: number; assetType: string }) =>
-    request.post(`/shot/${shotId}/assets`, data),
+    request.post(`/shot/${shotId}/assets`, null, { params: data }),
 
   // 解绑资产：DELETE /api/shot/{shotId}/assets/{assetId}
   unbindAsset: (shotId: number, assetId: number) =>

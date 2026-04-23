@@ -123,12 +123,9 @@ public class ImportNodeExecutor implements NodeExecutor {
 
     /**
      * 从 TOS 路径下载小说内容
-     * TODO: 后续完善 TOS 下载逻辑，当前通过公网 URL 获取
      */
     private String downloadNovelContent(String novelTosPath) {
         log.info("下载小说内容, novelTosPath: {}", novelTosPath);
-        // 简化实现：后续通过 TosService 或 HTTP 请求下载小说内容
-        // 当前返回空，需要接入 TOS 下载
-        return null;
+        return tosService.downloadAsString(novelTosPath);
     }
 }

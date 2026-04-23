@@ -6,7 +6,7 @@
         <h3>分集 / 分场</h3>
       </div>
       <div class="episode-list">
-        <section v-for="episode in mockEpisodes" :key="episode.id" class="episode-block">
+        <section v-for="episode in episodes" :key="episode.id" class="episode-block">
           <div class="episode-title">
             <span>{{ episode.title }}</span>
             <em>{{ episode.shotStats?.approved || 0 }}/{{ episode.shotStats?.total || 0 }}</em>
@@ -48,13 +48,13 @@
           <el-button :disabled="selectedShotIds.length === 0" type="danger" @click="openBatchReview('reject')">
             批量打回
           </el-button>
-          <el-button :disabled="selectedShotIds.length === 0" @click="mockRegenerateSelected">
+          <el-button :disabled="selectedShotIds.length === 0" @click="regenerateSelected">
             重新生成
           </el-button>
         </div>
       </div>
 
-      <div class="shot-list">
+      <div class="shot-list" v-loading="loadingShots">
         <ShotCard
           v-for="shot in currentPageShots"
           :key="shot.id"
@@ -63,7 +63,7 @@
           :scene-title="viewMode === 'project' ? sceneTitleMap[shot.sceneId] : ''"
           @toggle-select="toggleSelect"
           @review="openSingleReview"
-          @regenerate="mockRegenerate"
+          @regenerate="regenerateShot"
           @bind-assets="openBindPanel"
         />
       </div>
@@ -75,12 +75,13 @@
         description="当前筛选条件下没有分镜。"
       />
 
-      <div v-if="filteredShots.length > 0" class="pagination-container">
+      <div v-if="totalShots > 0" class="pagination-container">
         <el-pagination
           v-model:current-page="currentPage"
           :page-size="pageSize"
-          :total="filteredShots.length"
+          :total="totalShots"
           layout="total, prev, pager, next"
+          @current-change="fetchShots"
         />
       </div>
     </main>
@@ -95,25 +96,31 @@
     <AssetBindPanel
       v-model="bindPanelVisible"
       :shot="bindingShot"
-      :assets="mockAssets"
+      :assets="assets"
       @save="saveAssetBindings"
     />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ShotCard from '@/components/Shot/ShotCard.vue'
 import ShotReviewDialog from '@/components/Shot/ShotReviewDialog.vue'
 import AssetBindPanel from '@/components/Shot/AssetBindPanel.vue'
 import EmptyState from '@/components/Common/EmptyState.vue'
-import { AiTaskStatus, AssetStatus, AssetType, ShotStatus } from '@/types'
-import type { AssetVO, EpisodeVO, SceneVO, ShotAssetRef, ShotVO } from '@/types'
+import { ShotStatus } from '@/types'
+import { assetApi } from '@/api/asset'
+import { contentApi } from '@/api/content'
+import { projectApi } from '@/api/project'
+import type { AssetVO, EpisodeVO, SceneVO, ShotVO } from '@/types'
 
 const pageSize = 20
+const route = useRoute()
+const projectId = computed(() => Number(route.params.id))
 const currentPage = ref(1)
-const currentSceneId = ref(101)
+const currentSceneId = ref<number | null>(null)
 const viewMode = ref<'scene' | 'project'>('scene')
 const statusFilter = ref<'all' | ShotStatus>('all')
 const selectedShotIds = ref<number[]>([])
@@ -122,97 +129,12 @@ const reviewAction = ref<'approve' | 'reject'>('approve')
 const reviewTargetIds = ref<number[]>([])
 const bindPanelVisible = ref(false)
 const bindingShot = ref<ShotVO | null>(null)
-
-const mockEpisodes = ref<EpisodeVO[]>([
-  {
-    id: 1,
-    projectId: 1,
-    title: '第 1 集：雨夜来信',
-    sortOrder: 1,
-    content: null,
-    status: 1,
-    createTime: '2026-04-22 10:00:00',
-    updateTime: '2026-04-22 10:00:00',
-    sceneCount: 2,
-    shotStats: { total: 18, approved: 10, rejected: 2 }
-  },
-  {
-    id: 2,
-    projectId: 1,
-    title: '第 2 集：机械花园',
-    sortOrder: 2,
-    content: null,
-    status: 1,
-    createTime: '2026-04-22 10:00:00',
-    updateTime: '2026-04-22 10:00:00',
-    sceneCount: 2,
-    shotStats: { total: 14, approved: 6, rejected: 1 }
-  }
-])
-
-const mockScenes = ref<SceneVO[]>([
-  { id: 101, episodeId: 1, title: '第 1 场 天台告白', sortOrder: 1, content: null, status: 1, createTime: '', updateTime: '', shotCount: 9, shotStats: { total: 9, approved: 6, rejected: 1 } },
-  { id: 102, episodeId: 1, title: '第 2 场 地铁追逐', sortOrder: 2, content: null, status: 1, createTime: '', updateTime: '', shotCount: 9, shotStats: { total: 9, approved: 4, rejected: 1 } },
-  { id: 201, episodeId: 2, title: '第 1 场 温室苏醒', sortOrder: 1, content: null, status: 1, createTime: '', updateTime: '', shotCount: 8, shotStats: { total: 8, approved: 4, rejected: 0 } },
-  { id: 202, episodeId: 2, title: '第 2 场 核心机房', sortOrder: 2, content: null, status: 1, createTime: '', updateTime: '', shotCount: 6, shotStats: { total: 6, approved: 2, rejected: 1 } }
-])
-
-const mockAssets = ref<AssetVO[]>([
-  { id: 1, projectId: 1, assetType: AssetType.Character, name: '林夏', description: '短发女主，黑色风衣，冷静但敏锐。', referenceImages: ['/assets/images/project-cover-japanese.png'], stylePreset: null, status: AssetStatus.Confirmed, createTime: '', updateTime: '' },
-  { id: 2, projectId: 1, assetType: AssetType.Character, name: '祁野', description: '银发少年，机械义眼。', referenceImages: ['/assets/images/project-cover-scifi.png'], stylePreset: null, status: AssetStatus.Confirmed, createTime: '', updateTime: '' },
-  { id: 3, projectId: 1, assetType: AssetType.Scene, name: '雨夜天台', description: '霓虹、积水、城市远景。', referenceImages: ['/assets/images/bg-texture.png'], stylePreset: null, status: AssetStatus.Confirmed, createTime: '', updateTime: '' },
-  { id: 4, projectId: 1, assetType: AssetType.Prop, name: '蓝色芯片', description: '透明封装，内部有流动光点。', referenceImages: [], stylePreset: null, status: AssetStatus.Draft, createTime: '', updateTime: '' },
-  { id: 5, projectId: 1, assetType: AssetType.Voice, name: '女主声线', description: '低声、干净、带轻微沙哑。', referenceImages: [], stylePreset: { audioUrl: '' }, status: AssetStatus.Confirmed, createTime: '', updateTime: '' }
-])
-
-const assetRef = (assetId: number): ShotAssetRef => {
-  const asset = mockAssets.value.find(item => item.id === assetId)!
-  return {
-    assetId: asset.id,
-    assetType: asset.assetType,
-    assetName: asset.name,
-    primaryImage: asset.referenceImages?.[0] || ''
-  }
-}
-
-const mockShots = ref<ShotVO[]>(
-  Array.from({ length: 32 }).map((_, index) => {
-    const sceneIds = [101, 102, 201, 202]
-    const sceneId = sceneIds[index % sceneIds.length]
-    const statusCycle = [
-      ShotStatus.WaitingReview,
-      ShotStatus.Approved,
-      ShotStatus.Generating,
-      ShotStatus.Pending,
-      ShotStatus.Rejected,
-      ShotStatus.Completed
-    ]
-    const status = statusCycle[index % statusCycle.length]
-    return {
-      id: index + 1,
-      sceneId,
-      sortOrder: index + 1,
-      prompt: `镜头${index + 1}，雨水划过玻璃，角色在霓虹反光中抬头，情绪克制。`,
-      promptEn: `Shot ${index + 1}, rain streaks across glass, the character looks up under neon reflections with restrained emotion.`,
-      generatedImageUrl: index % 4 === 0 ? null : ['/assets/images/project-cover-japanese.png', '/assets/images/project-cover-scifi.png', '/assets/images/project-cover-chinese.png'][index % 3],
-      generatedVideoUrl: null,
-      status,
-      reviewComment: status === ShotStatus.Rejected ? '人物表情不够清晰，需要强化近景。' : null,
-      version: (index % 3) + 1,
-      generationAttempts: index % 4,
-      assetRefs: [assetRef(1), assetRef(sceneId === 101 ? 3 : 2)].filter(Boolean),
-      currentAiTask: status === ShotStatus.Generating
-        ? {
-            taskId: 9000 + index,
-            taskType: index % 2 === 0 ? 'image_gen' : 'video_gen',
-            status: index % 3 === 0 ? AiTaskStatus.Submitting : AiTaskStatus.Processing
-          }
-        : null,
-      createTime: '',
-      updateTime: ''
-    }
-  })
-)
+const episodes = ref<EpisodeVO[]>([])
+const scenes = ref<SceneVO[]>([])
+const shots = ref<ShotVO[]>([])
+const assets = ref<AssetVO[]>([])
+const totalShots = ref(0)
+const loadingShots = ref(false)
 
 const statusOptions = [
   { label: '全部', value: 'all' },
@@ -224,7 +146,7 @@ const statusOptions = [
 ]
 
 const scenesByEpisode = computed(() => {
-  return mockScenes.value.reduce<Record<number, SceneVO[]>>((result, scene) => {
+  return scenes.value.reduce<Record<number, SceneVO[]>>((result, scene) => {
     if (!result[scene.episodeId]) result[scene.episodeId] = []
     result[scene.episodeId].push(scene)
     return result
@@ -232,7 +154,7 @@ const scenesByEpisode = computed(() => {
 })
 
 const sceneTitleMap = computed(() => {
-  return mockScenes.value.reduce<Record<number, string>>((result, scene) => {
+  return scenes.value.reduce<Record<number, string>>((result, scene) => {
     result[scene.id] = scene.title
     return result
   }, {})
@@ -240,25 +162,21 @@ const sceneTitleMap = computed(() => {
 
 const currentSceneTitle = computed(() => {
   if (viewMode.value === 'project') return '全部镜头'
-  return sceneTitleMap.value[currentSceneId.value] || '当前分场'
+  return currentSceneId.value ? sceneTitleMap.value[currentSceneId.value] || '当前分场' : '当前分场'
 })
 
 const filteredShots = computed(() => {
-  const sceneShots = viewMode.value === 'scene'
-    ? mockShots.value.filter(shot => shot.sceneId === currentSceneId.value)
-    : mockShots.value
-  if (statusFilter.value === 'all') return sceneShots
-  return sceneShots.filter(shot => shot.status === statusFilter.value)
+  return shots.value
 })
 
 const currentPageShots = computed(() => {
-  const start = (currentPage.value - 1) * pageSize
-  return filteredShots.value.slice(start, start + pageSize)
+  return shots.value
 })
 
 const resetPage = () => {
   currentPage.value = 1
   selectedShotIds.value = []
+  fetchShots()
 }
 
 const selectScene = (sceneId: number) => {
@@ -289,37 +207,19 @@ const openSingleReview = (shot: ShotVO, action: 'approve' | 'reject') => {
   reviewDialogVisible.value = true
 }
 
-const submitReview = ({ action, comment }: { action: 'approve' | 'reject'; comment?: string }) => {
-  mockShots.value = mockShots.value.map(shot => {
-    if (!reviewTargetIds.value.includes(shot.id)) return shot
-    return {
-      ...shot,
-      status: action === 'approve' ? ShotStatus.Approved : ShotStatus.Rejected,
-      reviewComment: comment || null
-    }
-  })
+const submitReview = async ({ action, comment }: { action: 'approve' | 'reject'; comment?: string }) => {
+  await contentApi.batchReview({ shotIds: reviewTargetIds.value, action, comment })
   selectedShotIds.value = selectedShotIds.value.filter(id => !reviewTargetIds.value.includes(id))
   ElMessage.success(action === 'approve' ? '审核已通过' : '分镜已打回')
+  fetchShots()
 }
 
-const mockRegenerate = (shot: ShotVO) => {
-  mockShots.value = mockShots.value.map(item => item.id === shot.id
-    ? {
-        ...item,
-        status: ShotStatus.Generating,
-        generationAttempts: item.generationAttempts + 1,
-        currentAiTask: { taskId: Date.now(), taskType: 'image_gen', status: AiTaskStatus.Submitting }
-      }
-    : item
-  )
-  ElMessage.info('已进入重新生成队列')
+const regenerateShot = (_shot: ShotVO) => {
+  ElMessage.info('后端暂未提供单镜头重新生成接口')
 }
 
-const mockRegenerateSelected = () => {
-  selectedShotIds.value.forEach(id => {
-    const shot = mockShots.value.find(item => item.id === id)
-    if (shot) mockRegenerate(shot)
-  })
+const regenerateSelected = () => {
+  ElMessage.info('后端暂未提供批量重新生成接口')
   selectedShotIds.value = []
 }
 
@@ -328,15 +228,71 @@ const openBindPanel = (shot: ShotVO) => {
   bindPanelVisible.value = true
 }
 
-const saveAssetBindings = (assetIds: number[]) => {
+const saveAssetBindings = async (assetIds: number[]) => {
   if (!bindingShot.value) return
-  const refs = assetIds.map(assetRef)
-  mockShots.value = mockShots.value.map(shot => shot.id === bindingShot.value?.id
-    ? { ...shot, assetRefs: refs }
-    : shot
-  )
+  const oldIds = bindingShot.value.assetRefs.map(item => item.assetId)
+  const addIds = assetIds.filter(id => !oldIds.includes(id))
+  const removeIds = oldIds.filter(id => !assetIds.includes(id))
+  await Promise.all(addIds.map((assetId) => {
+    const asset = assets.value.find(item => item.id === assetId)
+    return asset ? contentApi.bindAsset(bindingShot.value!.id, { assetId, assetType: asset.assetType }) : Promise.resolve()
+  }))
+  await Promise.all(removeIds.map(assetId => contentApi.unbindAsset(bindingShot.value!.id, assetId)))
   ElMessage.success('资产绑定已更新')
+  fetchShots()
 }
+
+const fetchEpisodesAndScenes = async () => {
+  if (!projectId.value) return
+  const episodeRes = await contentApi.listEpisodes(projectId.value)
+  episodes.value = episodeRes.data
+  const sceneLists = await Promise.all(episodes.value.map(episode => contentApi.listScenes(episode.id)))
+  scenes.value = sceneLists.flatMap(res => res.data)
+  if (!currentSceneId.value && scenes.value.length > 0) currentSceneId.value = scenes.value[0].id
+}
+
+const fetchAssets = async () => {
+  if (!projectId.value) return
+  const res = await assetApi.list(projectId.value)
+  assets.value = res.data.list
+}
+
+const fetchShots = async () => {
+  if (!projectId.value) return
+  if (viewMode.value === 'scene' && !currentSceneId.value) {
+    shots.value = []
+    totalShots.value = 0
+    return
+  }
+  loadingShots.value = true
+  try {
+    const params = {
+      page: currentPage.value,
+      size: pageSize,
+      status: statusFilter.value === 'all' ? undefined : statusFilter.value,
+      sceneId: viewMode.value === 'scene' ? currentSceneId.value || undefined : undefined
+    }
+    const res = viewMode.value === 'project'
+      ? await projectApi.getShots(projectId.value, params)
+      : await contentApi.listShots(currentSceneId.value!, params)
+    shots.value = res.data.list || res.data.records || []
+    totalShots.value = res.data.total
+  } finally {
+    loadingShots.value = false
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([fetchEpisodesAndScenes(), fetchAssets()])
+  await fetchShots()
+})
+
+watch(() => route.params.id, async () => {
+  currentSceneId.value = null
+  currentPage.value = 1
+  await Promise.all([fetchEpisodesAndScenes(), fetchAssets()])
+  await fetchShots()
+})
 </script>
 
 <style scoped lang="scss">

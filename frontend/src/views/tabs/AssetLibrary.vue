@@ -179,7 +179,7 @@ const fetchAssetList = async () => {
   try {
     const params = {
       ...pageParams,
-      type: assetType.value === 'all' ? undefined : assetType.value,
+      assetType: assetType.value === 'all' ? undefined : assetType.value,
       keyword: searchKeyword.value || undefined
     }
     const res = await assetApi.list(projectId.value, params)
@@ -252,9 +252,9 @@ const handleDelete = async (asset: AssetVO) => {
   deleteWarning.value = ''
   try {
     // 检查资产引用
-    const res = await assetApi.checkReferences(asset.id)
-    if (res.data && res.data.count > 0) {
-      deleteWarning.value = `该资产已被 ${res.data.count} 个分镜引用，删除后会影响分镜生成！`
+    const res = await assetApi.getReferences(asset.id, { page: 1, size: 1 })
+    if (res.data && res.data.total > 0) {
+      deleteWarning.value = `该资产已被 ${res.data.total} 个分镜引用，删除后会影响分镜生成！`
     }
   } catch (err) {
     // 引用检查失败，继续删除流程

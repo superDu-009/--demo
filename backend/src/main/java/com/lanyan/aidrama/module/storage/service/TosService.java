@@ -7,10 +7,12 @@ import com.lanyan.aidrama.common.exception.TosException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 import java.io.InputStream;
 import java.io.IOException;
@@ -234,6 +236,65 @@ public class TosService {
                 || contentType.startsWith("video/")
                 || contentType.startsWith("text/")
                 || contentType.startsWith("application/");
+    }
+
+    /**
+     * 从TOS下载文件内容为字符串（用于小说等文本文件）
+     * @param key 文件Key
+     * @return 文件文本内容
+     */
+    public String downloadAsString(String key) {
+        try {
+            GetObjectRequest getRequest = GetObjectRequest.builder()
+                    .bucket(tosConfig.getBucket())
+                    .key(key)
+                    .build();
+
+            ResponseBytes<GetObjectResponse> responseBytes = s3Client.getObjectAsBytes(getRequest);
+            String content = responseBytes.asUtf8String();
+
+            if (content == null || content.isBlank()) {
+                throw new TosException(51105, "文件内容为空");
+            }
+
+            log.info("TOS文件下载成功, key: {}, size: {} bytes", key, responseBytes.asByteArray().length);
+            return content;
+        } catch (NoSuchKeyException e) {
+            log.error("TOS文件不存在, key: {}", key, e);
+            throw new TosException(51105, "文件不存在：" + e.getMessage());
+        } catch (Exception e) {
+            log.error("TOS文件下载失败, key: {}", key, e);
+            throw new TosException(51105, "文件下载失败：" + e.getMessage());
+        }
+    }
+
+    /**
+     * 生成GET预签名下载URL
+     * @param key 文件Key
+     * @param expireSeconds 有效期（秒），默认1小时
+     * @return 预签名下载URL
+     */
+    public String generateDownloadUrl(String key, Long expireSeconds) {
+        try {
+            long expiry = expireSeconds != null ? expireSeconds : DEFAULT_EXPIRE_SECONDS;
+
+            GetObjectRequest getRequest = GetObjectRequest.builder()
+                    .bucket(tosConfig.getBucket())
+                    .key(key)
+                    .build();
+
+            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                    .signatureDuration(Duration.ofSeconds(expiry))
+                    .getObjectRequest(getRequest)
+                    .build();
+
+            URL presignedUrl = s3Presigner.presignGetObject(presignRequest).url();
+            log.info("生成TOS预签名下载URL成功, key: {}", key);
+            return presignedUrl.toString();
+        } catch (Exception e) {
+            log.error("生成TOS预签名下载URL失败, key: {}", key, e);
+            throw new TosException(51106, "生成下载链接失败：" + e.getMessage());
+        }
     }
 
     /**

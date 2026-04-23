@@ -49,22 +49,28 @@
           <p class="eyebrow">Status</p>
           <h4>执行状态</h4>
         </div>
-        <WorkflowStatus :steps="workflowStatus.steps" :step-name-map="stepNameMap" />
+        <WorkflowStatus
+          :steps="workflowStatus.steps"
+          :step-name-map="stepNameMap"
+          @review="reviewWorkflowStep"
+        />
       </aside>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import draggable from 'vuedraggable'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Upload, Search, Edit, Picture, Film, Folder
 } from '@element-plus/icons-vue'
 import WorkflowNode from '@/components/Workflow/WorkflowNode.vue'
 import WorkflowProgress from '@/components/Workflow/WorkflowProgress.vue'
 import WorkflowStatus from '@/components/Workflow/WorkflowStatus.vue'
+import { projectApi } from '@/api/project'
 import { StepType, WorkflowTaskStatus } from '@/types'
 import type { WorkflowStep, WorkflowStatusVO } from '@/types'
 
@@ -113,6 +119,8 @@ const stepNameMap = Object.entries(stepMeta).reduce<Record<string, string>>((res
 }, {})
 
 const getStepMeta = (stepType: StepType) => stepMeta[stepType]
+const route = useRoute()
+const projectId = computed(() => Number(route.params.id))
 
 const workflowSteps = ref<WorkflowStep[]>([
   { stepType: 'import', enabled: true, review: false, config: {} },
@@ -127,6 +135,7 @@ const saving = ref(false)
 const starting = ref(false)
 const isRunning = ref(false)
 let runTimer: number | null = null
+const projectVersion = ref(0)
 
 const workflowStatus = reactive<WorkflowStatusVO>({
   executionLock: 0,
@@ -154,6 +163,20 @@ const currentDetail = computed(() => {
   return current?.currentDetail || (isRunning.value ? '准备执行' : '等待执行')
 })
 
+const applyWorkflowStatus = (status: WorkflowStatusVO) => {
+  workflowStatus.executionLock = status.executionLock
+  workflowStatus.currentStep = status.currentStep
+  workflowStatus.currentEpisodeId = status.currentEpisodeId
+  workflowStatus.currentEpisodeTitle = status.currentEpisodeTitle
+  workflowStatus.totalEpisodes = status.totalEpisodes
+  workflowStatus.overallProgress = status.overallProgress
+  workflowStatus.totalShots = status.totalShots
+  workflowStatus.processedShots = status.processedShots
+  workflowStatus.estimatedRemainingSeconds = status.estimatedRemainingSeconds
+  workflowStatus.steps = status.steps || []
+  isRunning.value = status.executionLock === 1
+}
+
 const syncStatusSteps = () => {
   workflowStatus.steps = workflowSteps.value.map((step, index) => {
     const old = workflowStatus.steps.find(item => item.stepType === step.stepType)
@@ -175,107 +198,96 @@ const updateStep = (index: number, step: WorkflowStep) => {
 }
 
 const saveWorkflow = async () => {
+  if (!projectId.value) return
   saving.value = true
   try {
-    // 这里先保留前端 mock 保存，后续可替换为 projectApi.saveWorkflow(projectId, payload)。
-    const payload = {
+    await projectApi.saveWorkflow(projectId.value, {
+      version: projectVersion.value,
       workflowConfig: { steps: workflowSteps.value },
       stylePreset: {}
-    }
-    console.info('[mock save workflow]', payload)
-    await new Promise(resolve => window.setTimeout(resolve, 500))
+    })
     ElMessage.success('配置已保存')
+    await loadProjectWorkflow()
   } finally {
     saving.value = false
   }
 }
 
 const startWorkflow = async () => {
+  if (!projectId.value) return
   starting.value = true
   try {
-    await new Promise(resolve => window.setTimeout(resolve, 400))
-    isRunning.value = true
-    workflowStatus.executionLock = 1
-    workflowStatus.overallProgress = 0
-    workflowStatus.estimatedRemainingSeconds = 900
-    syncStatusSteps()
-    workflowStatus.steps.forEach(step => {
-      step.status = WorkflowTaskStatus.NotStarted
-      step.progress = 0
-      step.currentDetail = '等待执行'
-    })
-    runMockExecution()
+    await projectApi.startWorkflow(projectId.value)
     ElMessage.success('工作流已开始执行')
+    await fetchWorkflowStatus()
+    startPolling()
   } finally {
     starting.value = false
   }
 }
 
-const stopWorkflow = () => {
+const stopPolling = () => {
   if (runTimer) {
     window.clearInterval(runTimer)
     runTimer = null
   }
+}
+
+const stopWorkflow = async () => {
+  if (!projectId.value) return
+  stopPolling()
+  await projectApi.stopWorkflow(projectId.value)
   isRunning.value = false
-  workflowStatus.executionLock = 0
-  workflowStatus.currentStep = null
-  workflowStatus.estimatedRemainingSeconds = 0
-  workflowStatus.steps.forEach(step => {
-    if (step.status === WorkflowTaskStatus.Running) {
-      step.status = WorkflowTaskStatus.NotStarted
-      step.currentDetail = '已终止'
-    }
-  })
+  await fetchWorkflowStatus()
   ElMessage.info('工作流已终止')
 }
 
-const runMockExecution = () => {
-  const enabledSteps = workflowSteps.value.filter(step => step.enabled)
-  let activeIndex = 0
-  let activeProgress = 0
-
-  runTimer = window.setInterval(() => {
-    const active = enabledSteps[activeIndex]
-    if (!active) {
-      stopWorkflow()
-      workflowStatus.overallProgress = 100
-      workflowStatus.steps.forEach(step => {
-        if (step.status !== WorkflowTaskStatus.Success && workflowSteps.value.find(item => item.stepType === step.stepType)?.enabled) {
-          step.status = WorkflowTaskStatus.Success
-          step.progress = 100
-          step.currentDetail = '执行成功'
-        }
-      })
-      ElMessage.success('工作流执行完成')
-      return
-    }
-
-    const statusStep = workflowStatus.steps.find(step => step.stepType === active.stepType)
-    if (!statusStep) return
-
-    statusStep.status = WorkflowTaskStatus.Running
-    statusStep.currentDetail = `${stepNameMap[active.stepType]} - mock 执行中`
-    activeProgress += 10
-    statusStep.progress = Math.min(activeProgress, 100)
-    workflowStatus.currentStep = active.stepType
-    workflowStatus.overallProgress = Math.min(
-      100,
-      Math.round(((activeIndex + activeProgress / 100) / enabledSteps.length) * 100)
-    )
-    workflowStatus.estimatedRemainingSeconds = Math.max(0, workflowStatus.estimatedRemainingSeconds - 30)
-
-    if (activeProgress >= 100) {
-      statusStep.status = active.review ? WorkflowTaskStatus.WaitingReview : WorkflowTaskStatus.Success
-      statusStep.currentDetail = active.review ? '待人工审核' : '执行成功'
-      statusStep.progress = 100
-      activeIndex += 1
-      activeProgress = 0
-    }
-  }, 500)
+const fetchWorkflowStatus = async () => {
+  if (!projectId.value) return
+  const res = await projectApi.getWorkflowStatus(projectId.value)
+  applyWorkflowStatus(res.data)
+  if (res.data.executionLock === 0) stopPolling()
 }
 
+const startPolling = () => {
+  stopPolling()
+  runTimer = window.setInterval(fetchWorkflowStatus, 3000)
+}
+
+const reviewWorkflowStep = async (stepType: string, action: 'approve' | 'reject') => {
+  if (!projectId.value) return
+  let comment = ''
+  if (action === 'reject') {
+    const result = await ElMessageBox.prompt('请输入打回原因', '打回流程步骤', {
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+      inputType: 'textarea',
+      inputValidator: value => !!value.trim() || '打回原因不能为空'
+    })
+    comment = result.value
+  }
+  await projectApi.reviewWorkflow(projectId.value, { stepType, action, comment })
+  ElMessage.success(action === 'approve' ? '步骤已通过' : '步骤已打回')
+  await fetchWorkflowStatus()
+  if (isRunning.value) startPolling()
+}
+
+const loadProjectWorkflow = async () => {
+  if (!projectId.value) return
+  const res = await projectApi.getDetail(projectId.value)
+  projectVersion.value = res.data.version || 0
+  if (res.data.workflowConfig?.steps?.length) {
+    workflowSteps.value = res.data.workflowConfig.steps
+    syncStatusSteps()
+  }
+  await fetchWorkflowStatus().catch(() => undefined)
+  if (isRunning.value) startPolling()
+}
+
+onMounted(loadProjectWorkflow)
+
 onBeforeUnmount(() => {
-  if (runTimer) window.clearInterval(runTimer)
+  stopPolling()
 })
 </script>
 

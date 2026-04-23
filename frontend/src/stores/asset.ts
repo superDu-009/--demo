@@ -17,7 +17,7 @@ export const useAssetStore = defineStore('asset', () => {
   async function fetchAssets(projectId: number, assetType?: AssetType) {
     loading.value = true
     try {
-      const res = await assetApi.list(projectId, { type: assetType })
+      const res = await assetApi.list(projectId, { assetType })
       const pageData = res.data as PageResult<AssetVO>
       const list = pageData.records || pageData.list
       if (assetType) {

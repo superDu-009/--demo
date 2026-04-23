@@ -13,17 +13,33 @@ import org.springframework.web.client.RestTemplate;
 @Configuration
 public class DoubaoConfig {
 
-    /** API 地址 (OpenAI 兼容格式) */
+    /** 对话 API 地址 */
     @Value("${doubao.api-url:https://ark.cn-beijing.volces.com/api/v3/chat/completions}")
     private String apiUrl;
+
+    /** 图片生成 API 地址 */
+    @Value("${doubao.image-api-url:https://ark.cn-beijing.volces.com/api/v3/images/generations}")
+    private String imageApiUrl;
+
+    /** 视频生成 API 地址 */
+    @Value("${doubao.video-api-url:https://ark.cn-beijing.volces.com/api/v3/content/generation/tasks}")
+    private String videoApiUrl;
 
     /** API Key */
     @Value("${doubao.api-key:}")
     private String apiKey;
 
-    /** 默认模型 */
+    /** 对话模型 */
     @Value("${doubao.model:doubao-seed-2-0-pro-260215}")
     private String model;
+
+    /** 图片生成模型 */
+    @Value("${doubao.image-model:doubao-seedream-5-0-260128}")
+    private String imageModel;
+
+    /** 视频生成模型 */
+    @Value("${doubao.video-model:doubao-seedance-2-0-260128}")
+    private String videoModel;
 
     /** 请求超时（毫秒） */
     @Value("${doubao.timeout:120000}")
@@ -33,12 +49,28 @@ public class DoubaoConfig {
         return apiUrl;
     }
 
+    public String getImageApiUrl() {
+        return imageApiUrl;
+    }
+
+    public String getVideoApiUrl() {
+        return videoApiUrl;
+    }
+
     public String getApiKey() {
         return apiKey;
     }
 
     public String getModel() {
         return model;
+    }
+
+    public String getImageModel() {
+        return imageModel;
+    }
+
+    public String getVideoModel() {
+        return videoModel;
     }
 
     public int getTimeout() {
