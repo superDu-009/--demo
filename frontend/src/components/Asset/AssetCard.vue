@@ -1,211 +1,152 @@
-<!-- components/Asset/AssetCard.vue — 资产卡片组件 -->
 <template>
-  <div class="asset-card card-glass border-neon">
-    <!-- 资产封面 -->
-    <div class="asset-cover">
-      <div v-if="isVoiceAsset && audioUrl" class="audio-cover">
-        <el-icon :size="42"><Microphone /></el-icon>
-        <audio :src="audioUrl" controls preload="none" />
-      </div>
-      <img 
-        v-else-if="asset.referenceImages && asset.referenceImages.length > 0" 
-        :src="asset.referenceImages[0]" 
-        alt="资产封面"
-        class="cover-img"
-      >
-      <div v-else class="empty-cover">
-        <el-icon :size="48" class="empty-icon"><Picture /></el-icon>
-      </div>
-      <!-- 状态标签 -->
-      <div class="status-tag" :class="`status-${asset.status}`">
-        {{ statusLabel }}
+  <article class="asset-card card-glass border-neon">
+    <div class="cover">
+      <img v-if="coverUrl" :src="coverUrl" alt="资产缩略图" />
+      <div v-else class="empty-cover">待生成</div>
+      <div v-if="safeChildPreviewList.length > 0" class="child-strip">
+        <img v-for="url in safeChildPreviewList" :key="url" :src="url" alt="子资产缩略图" />
       </div>
     </div>
 
-    <!-- 卡片内容 -->
-    <div class="card-content">
-      <h3 class="asset-name">{{ asset.name }}</h3>
-      <div class="asset-type-tag">
-        <el-tag :type="tagType" size="small">{{ typeLabel }}</el-tag>
+    <div class="body">
+      <div class="header">
+        <div>
+          <h3>{{ asset.name }}</h3>
+          <p>{{ typeLabel }}</p>
+        </div>
+        <el-tag :type="statusMeta.type">{{ statusMeta.label }}</el-tag>
       </div>
-      <p class="asset-desc" v-if="asset.description">{{ asset.description }}</p>
 
-      <!-- 操作按钮 -->
-      <div class="card-actions">
+      <p class="description">{{ asset.description || '未填写资产描述。' }}</p>
+
+      <div class="tree-line" v-if="safeParentAssetNames.length > 0">
+        <span>父资产：</span>{{ safeParentAssetNames.join(' / ') }}
+      </div>
+
+      <div class="actions">
+        <el-button
+          class="btn-gradient"
+          size="small"
+          :loading="generating"
+          :disabled="generating"
+          @click="$emit('generate', asset)"
+        >
+          {{ generateText }}
+        </el-button>
         <el-button size="small" @click="$emit('edit', asset)">编辑</el-button>
-        <el-button 
-          size="small" 
-          type="success" 
-          v-if="asset.status === 0"
-          @click="$emit('confirm', asset)"
-        >确认</el-button>
-        <el-button 
-          size="small" 
-          type="danger" 
-          @click="$emit('delete', asset)"
-        >删除</el-button>
+        <el-button size="small" type="danger" plain @click="$emit('delete', asset)">删除</el-button>
       </div>
     </div>
-  </div>
+  </article>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { Microphone, Picture } from '@element-plus/icons-vue'
-import { AssetType } from '@/types'
+import { AssetType, GenerationStatus } from '@/types'
+import { ASSET_STATUS_MAP, GENERATION_STATUS_MAP } from '@/constants/status'
 import type { AssetVO } from '@/types'
-import { ASSET_STATUS_MAP } from '@/constants/status'
 
 const props = defineProps<{
   asset: AssetVO
+  generatingStatus?: GenerationStatus
+  parentAssetNames?: string[]
+  childPreviewList?: string[]
 }>()
 
-const emit = defineEmits<{
+defineEmits<{
   edit: [asset: AssetVO]
   delete: [asset: AssetVO]
-  confirm: [asset: AssetVO]
+  generate: [asset: AssetVO]
 }>()
 
-const statusLabel = computed(() => ASSET_STATUS_MAP[props.asset.status]?.label || '未知')
-const isVoiceAsset = computed(() => props.asset.assetType === AssetType.Voice)
-const audioUrl = computed(() => String(props.asset.stylePreset?.audioUrl || ''))
-
-// 资产类型标签文本
+const statusMeta = computed(() => ASSET_STATUS_MAP[props.asset.status])
+const safeParentAssetNames = computed(() => props.parentAssetNames || [])
+const safeChildPreviewList = computed(() => props.childPreviewList || [])
 const typeLabel = computed(() => {
-  const map: Record<string, string> = {
+  const map: Record<AssetType, string> = {
     character: '角色',
     scene: '场景',
-    prop: '物品',
+    prop: '道具',
     voice: '声音'
   }
-  return map[props.asset.assetType] || props.asset.assetType
+  return map[props.asset.assetType]
 })
-
-// 标签类型
-const tagType = computed(() => {
-  const map: Record<string, 'primary' | 'success' | 'warning' | 'info'> = {
-    character: 'primary',
-    scene: 'success',
-    prop: 'warning',
-    voice: 'info'
-  }
-  return map[props.asset.assetType] || 'primary'
-})
+const coverUrl = computed(() => props.asset.referenceImages?.[0] || '')
+const generating = computed(() => props.generatingStatus === GenerationStatus.Processing)
+const generateText = computed(() => GENERATION_STATUS_MAP[props.generatingStatus ?? GenerationStatus.Pending].actionText)
 </script>
 
 <style scoped lang="scss">
 .asset-card {
-  height: 100%;
-  display: flex;
-  flex-direction: column;
   overflow: hidden;
-  border-radius: 12px;
-  transition: all 0.3s ease;
 }
 
-.asset-cover {
+.cover {
   position: relative;
-  height: 160px;
-  width: 100%;
-  overflow: hidden;
-  border-radius: 12px 12px 0 0;
-  background: rgba(100, 108, 255, 0.05);
+  height: 180px;
+  background: rgba(255, 255, 255, 0.04);
 
-  .cover-img {
+  img {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: transform 0.5s ease;
-  }
-
-  .empty-cover {
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: $text-tertiary;
-  }
-
-  .audio-cover {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    padding: 16px;
-    color: $accent-green;
-    background: rgba(34, 211, 238, 0.06);
-
-    audio {
-      width: 100%;
-      height: 32px;
-    }
-  }
-
-  .status-tag {
-    position: absolute;
-    top: 12px;
-    right: 12px;
-    padding: 4px 10px;
-    border-radius: 20px;
-    font-size: 12px;
-    color: #fff;
-    backdrop-filter: blur(8px);
-    background: rgba(144, 147, 153, 0.8);
-
-    &.status-1 {
-      background: rgba(103, 194, 58, 0.8);
-    }
-
-    &.status-2 {
-      background: rgba(245, 108, 108, 0.8);
-    }
   }
 }
 
-.asset-card:hover .cover-img {
-  transform: scale(1.05);
-}
-
-.card-content {
-  padding: 16px;
-  flex: 1;
+.empty-cover {
+  height: 100%;
   display: flex;
-  flex-direction: column;
-}
-
-.asset-name {
-  font-size: 16px;
-  font-weight: 600;
-  color: $text-primary;
-  margin: 0 0 8px 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.asset-type-tag {
-  margin-bottom: 12px;
-}
-
-.asset-desc {
-  font-size: 13px;
+  align-items: center;
+  justify-content: center;
   color: $text-secondary;
-  line-height: 1.4;
-  margin-bottom: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  flex: 1;
 }
 
-.card-actions {
+.child-strip {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+
+  img {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 2px solid rgba(255, 255, 255, 0.72);
+  }
+}
+
+.body {
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+
+  h3 {
+    margin: 0;
+    color: $text-primary;
+  }
+
+  p {
+    margin: 6px 0 0;
+    color: $text-secondary;
+    font-size: 12px;
+  }
+}
+
+.description,
+.tree-line {
+  margin: 12px 0 0;
+  color: $text-secondary;
+  line-height: 1.6;
+}
+
+.actions {
   display: flex;
   gap: 8px;
-  margin-top: auto;
+  margin-top: 16px;
 }
 </style>

@@ -45,41 +45,15 @@ public class DoubaoConfig {
     @Value("${doubao.timeout:120000}")
     private int timeout;
 
-    public String getApiUrl() {
-        return apiUrl;
-    }
+    public String getApiUrl() { return apiUrl; }
+    public String getImageApiUrl() { return imageApiUrl; }
+    public String getVideoApiUrl() { return videoApiUrl; }
+    public String getApiKey() { return apiKey; }
+    public String getModel() { return model; }
+    public String getImageModel() { return imageModel; }
+    public String getVideoModel() { return videoModel; }
+    public int getTimeout() { return timeout; }
 
-    public String getImageApiUrl() {
-        return imageApiUrl;
-    }
-
-    public String getVideoApiUrl() {
-        return videoApiUrl;
-    }
-
-    public String getApiKey() {
-        return apiKey;
-    }
-
-    public String getModel() {
-        return model;
-    }
-
-    public String getImageModel() {
-        return imageModel;
-    }
-
-    public String getVideoModel() {
-        return videoModel;
-    }
-
-    public int getTimeout() {
-        return timeout;
-    }
-
-    /**
-     * Doubao 专用 RestTemplate Bean，配置超时
-     */
     @Bean("doubaoRestTemplate")
     public RestTemplate doubaoRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();

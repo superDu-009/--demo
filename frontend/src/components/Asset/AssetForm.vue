@@ -1,284 +1,133 @@
 <template>
-  <el-form
-    ref="formRef"
-    :model="form"
-    :rules="rules"
-    label-width="92px"
-    class="asset-form"
-  >
+  <el-form ref="formRef" :model="form" :rules="rules" label-width="96px">
     <el-form-item label="资产类型" prop="assetType">
-      <el-segmented
-        v-model="form.assetType"
-        :options="assetTypeOptions"
-        :disabled="mode === 'edit'"
-      />
+      <el-select v-model="form.assetType" class="full-width" :disabled="mode === 'edit'">
+        <el-option v-for="item in ASSET_TYPE_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
+      </el-select>
     </el-form-item>
-
     <el-form-item label="资产名称" prop="name">
-      <el-input
-        v-model="form.name"
-        placeholder="例如：女主角林夏 / 雨夜天台 / 古铜钥匙"
-        maxlength="80"
-        show-word-limit
-      />
+      <el-input v-model="form.name" maxlength="80" show-word-limit />
     </el-form-item>
-
-    <el-form-item label="描述文本" prop="description">
-      <el-input
-        v-model="form.description"
-        type="textarea"
-        :rows="4"
-        placeholder="记录外观、性格、服饰、场景氛围或声音特征，供后续 AI 生成复用。"
-        maxlength="1000"
-        show-word-limit
-      />
+    <el-form-item label="资产描述">
+      <el-input v-model="form.description" type="textarea" :rows="3" maxlength="1000" show-word-limit />
     </el-form-item>
-
-    <el-form-item v-if="form.assetType !== AssetType.Voice" label="参考图">
-      <div class="reference-list">
-        <div
-          v-for="(url, index) in form.referenceImages"
-          :key="`${url}-${index}`"
-          class="reference-item"
-        >
-          <el-image :src="url" fit="cover" class="reference-image" />
-          <el-tag v-if="index === 0" size="small" type="success" class="main-tag">主图</el-tag>
-          <el-button
-            class="remove-reference"
-            type="danger"
-            size="small"
-            circle
-            @click="removeReference(index)"
-          >
-            <el-icon><Close /></el-icon>
-          </el-button>
+    <el-form-item label="参考图">
+      <div class="upload-box">
+        <div class="preview-list">
+          <div v-for="(url, index) in form.referenceImages" :key="`${url}-${index}`" class="preview-item">
+            <img :src="url" alt="参考图" />
+            <el-button circle size="small" type="danger" class="delete-btn" @click="removeReference(index)">×</el-button>
+          </div>
         </div>
-
         <TosUpload
-          class="reference-uploader"
-          :model-value="uploadTempUrl"
+          v-model="uploadTemp"
           :project-id="projectId"
           file-type="asset"
-          :project-dir="`projects/${projectId}/assets`"
           button-text="上传参考图"
-          tip-text="支持 png/jpg/webp，单张最大10MB"
+          tip-text="最多 3 张"
           accept=".png,.jpg,.jpeg,.webp"
           :allowed-types="['image/png', 'image/jpeg', 'image/webp']"
           :max-file-size="10 * 1024 * 1024"
           :show-preview="false"
-          @success="addUploadedReference"
-          @update:model-value="uploadTempUrl = $event"
+          @success="addReference"
         />
       </div>
     </el-form-item>
-
-    <el-form-item v-else label="声音文件">
-      <div class="audio-field">
-        <TosUpload
-          v-model="audioUrl"
-          :project-id="projectId"
-          file-type="asset"
-          :project-dir="`projects/${projectId}/assets/voice`"
-          button-text="上传声音资产"
-          tip-text="支持 mp3/wav/m4a，单文件最大30MB"
-          accept=".mp3,.wav,.m4a,.aac"
-          :allowed-types="['audio/mpeg', 'audio/wav', 'audio/x-wav', 'audio/mp4', 'audio/aac']"
-          :max-file-size="30 * 1024 * 1024"
-          :show-preview="false"
-        />
-        <audio
-          v-if="audioUrl"
-          class="audio-preview"
-          :src="audioUrl"
-          controls
-          preload="none"
-        />
-        <el-button v-if="audioUrl" type="danger" plain @click="audioUrl = ''">
-          清除声音
-        </el-button>
-      </div>
+    <el-form-item label="是否子资产">
+      <el-switch v-model="isSubAsset" />
     </el-form-item>
-
-    <el-form-item label="备用链接">
-      <div class="reference-input">
-        <el-input
-          v-model="manualUrl"
-          :placeholder="form.assetType === AssetType.Voice ? '粘贴音频 URL，回车添加' : '粘贴参考图 URL，回车添加'"
-          clearable
-          @keyup.enter="addManualUrl"
+    <el-form-item v-if="isSubAsset" label="父资产">
+      <el-select v-model="form.parentIds" class="full-width" multiple collapse-tags>
+        <el-option
+          v-for="item in parentCandidates"
+          :key="item.id"
+          :label="item.name"
+          :value="item.id"
         />
-        <el-button @click="addManualUrl">
-          <el-icon><Plus /></el-icon>
-          添加
-        </el-button>
-      </div>
+      </el-select>
     </el-form-item>
-
-    <div class="style-grid">
-      <el-form-item label="画风">
-        <el-input v-model="form.stylePreset.artStyle" placeholder="赛璐璐 / 水墨 / 厚涂" />
-      </el-form-item>
-      <el-form-item label="色调">
-        <el-input v-model="form.stylePreset.colorTone" placeholder="冷色 / 暖光 / 高对比" />
-      </el-form-item>
-    </div>
+    <el-form-item label="草稿内容">
+      <el-input v-model="form.draftContent" type="textarea" :rows="3" maxlength="800" show-word-limit />
+    </el-form-item>
   </el-form>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
-import { Close, Plus } from '@element-plus/icons-vue'
 import TosUpload from '@/components/Common/TosUpload.vue'
+import { ASSET_TYPE_OPTIONS } from '@/constants/options'
 import { AssetType } from '@/types'
 import type { AssetCreateRequest, AssetUpdateRequest, AssetVO } from '@/types'
-
-interface AssetFormState {
-  assetType: AssetType
-  name: string
-  description: string
-  referenceImages: string[]
-  stylePreset: Record<string, any>
-}
 
 const props = withDefaults(defineProps<{
   mode?: 'create' | 'edit'
   asset?: AssetVO | null
-  defaultType?: AssetType | 'all'
   projectId?: number
+  assets?: AssetVO[]
 }>(), {
   mode: 'create',
   asset: null,
-  defaultType: AssetType.Character,
-  projectId: 0
+  projectId: 0,
+  assets: () => []
 })
 
 const formRef = ref<FormInstance>()
-const manualUrl = ref('')
-const uploadTempUrl = ref('')
-const audioUrl = ref('')
+const uploadTemp = ref('')
+const isSubAsset = ref(false)
 
-const assetTypeOptions = [
-  { label: '角色', value: AssetType.Character },
-  { label: '场景', value: AssetType.Scene },
-  { label: '物品', value: AssetType.Prop },
-  { label: '声音', value: AssetType.Voice }
-]
-
-const form = reactive<AssetFormState>({
+const form = reactive({
   assetType: AssetType.Character,
   name: '',
   description: '',
-  referenceImages: [],
-  stylePreset: {
-    artStyle: '',
-    colorTone: '',
-    audioUrl: ''
-  }
+  referenceImages: [] as string[],
+  parentIds: [] as number[],
+  draftContent: ''
 })
 
 const rules: FormRules = {
   assetType: [{ required: true, message: '请选择资产类型', trigger: 'change' }],
-  name: [
-    { required: true, message: '请输入资产名称', trigger: 'blur' },
-    { min: 1, max: 80, message: '长度在 1 到 80 个字符', trigger: 'blur' }
-  ]
+  name: [{ required: true, message: '请输入资产名称', trigger: 'blur' }]
 }
 
-const resetForm = () => {
-  const fallbackType = props.defaultType === 'all' ? AssetType.Character : props.defaultType
-  form.assetType = fallbackType
-  form.name = ''
-  form.description = ''
-  form.referenceImages = []
-  form.stylePreset = { artStyle: '', colorTone: '', audioUrl: '' }
-  manualUrl.value = ''
-  uploadTempUrl.value = ''
-  audioUrl.value = ''
-  formRef.value?.clearValidate()
+const parentCandidates = computed(() => {
+  return props.assets.filter(item => item.id !== props.asset?.id)
+})
+
+const fillForm = () => {
+  form.assetType = props.asset?.assetType || AssetType.Character
+  form.name = props.asset?.name || ''
+  form.description = props.asset?.description || ''
+  form.referenceImages = [...(props.asset?.referenceImages || [])]
+  form.parentIds = [...(props.asset?.parentIds || [])]
+  form.draftContent = props.asset?.draftContent || ''
+  isSubAsset.value = form.parentIds.length > 0
 }
 
-const fillForm = (asset: AssetVO) => {
-  form.assetType = asset.assetType
-  form.name = asset.name
-  form.description = asset.description || ''
-  form.referenceImages = [...(asset.referenceImages || [])]
-  form.stylePreset = {
-    artStyle: asset.stylePreset?.artStyle || '',
-    colorTone: asset.stylePreset?.colorTone || '',
-    audioUrl: asset.stylePreset?.audioUrl || '',
-    ...asset.stylePreset
-  }
-  audioUrl.value = String(asset.stylePreset?.audioUrl || '')
-  manualUrl.value = ''
-  uploadTempUrl.value = ''
-  formRef.value?.clearValidate()
-}
+watch(() => props.asset, fillForm, { immediate: true })
 
-watch(
-  () => [props.asset, props.mode, props.defaultType] as const,
-  () => {
-    if (props.mode === 'edit' && props.asset) {
-      fillForm(props.asset)
-    } else {
-      resetForm()
-    }
-  },
-  { immediate: true }
-)
-
-const addUploadedReference = (url: string) => {
-  if (!url) return
-  if (!form.referenceImages) form.referenceImages = []
+const addReference = (url: string) => {
+  if (!url || form.referenceImages.length >= 3) return
   form.referenceImages.push(url)
-  uploadTempUrl.value = ''
-}
-
-const addManualUrl = () => {
-  const url = manualUrl.value.trim()
-  if (!url) return
-  if (!/^https?:\/\//i.test(url) && !url.startsWith('/')) {
-    ElMessage.warning('请填写有效的资源 URL')
-    return
-  }
-  if (form.assetType === AssetType.Voice) {
-    audioUrl.value = url
-    manualUrl.value = ''
-    return
-  }
-  if (!form.referenceImages) form.referenceImages = []
-  form.referenceImages.push(url)
-  manualUrl.value = ''
+  uploadTemp.value = ''
 }
 
 const removeReference = (index: number) => {
-  form.referenceImages?.splice(index, 1)
-}
-
-const normalizeStylePreset = () => {
-  const stylePreset = { ...(form.stylePreset || {}) }
-  if (form.assetType === AssetType.Voice && audioUrl.value) {
-    stylePreset.audioUrl = audioUrl.value
-  }
-  Object.keys(stylePreset).forEach((key) => {
-    if (stylePreset[key] === '') delete stylePreset[key]
-  })
-  return Object.keys(stylePreset).length > 0 ? stylePreset : undefined
+  form.referenceImages.splice(index, 1)
 }
 
 const validate = async (): Promise<AssetCreateRequest | AssetUpdateRequest | false> => {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return false
-
   const payload: AssetCreateRequest = {
     assetType: form.assetType,
     name: form.name.trim(),
     description: form.description?.trim() || undefined,
-    referenceImages: form.assetType === AssetType.Voice ? [] : form.referenceImages?.filter(Boolean),
-    stylePreset: normalizeStylePreset()
+    referenceImages: form.referenceImages,
+    parentIds: isSubAsset.value ? form.parentIds : [],
+    draftContent: form.draftContent?.trim() || undefined,
+    stylePreset: null
   }
-
   if (props.mode === 'edit') {
     const { assetType, ...updatePayload } = payload
     return updatePayload
@@ -286,82 +135,42 @@ const validate = async (): Promise<AssetCreateRequest | AssetUpdateRequest | fal
   return payload
 }
 
-defineExpose({ validate, resetForm })
+defineExpose({ validate })
 </script>
 
 <style scoped lang="scss">
-.asset-form {
-  :deep(.el-segmented) {
-    background: rgba(100, 108, 255, 0.08);
-    border: 1px solid rgba(100, 108, 255, 0.18);
-  }
-}
-
-.reference-list {
+.full-width {
   width: 100%;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 12px;
 }
 
-.reference-item {
-  position: relative;
-  aspect-ratio: 1;
-  border-radius: 8px;
-  overflow: hidden;
-  background: rgba(100, 108, 255, 0.06);
-  border: 1px solid rgba(100, 108, 255, 0.2);
-}
-
-.reference-image {
+.upload-box {
   width: 100%;
-  height: 100%;
 }
 
-.main-tag {
-  position: absolute;
-  left: 8px;
-  top: 8px;
-}
-
-.remove-reference {
-  position: absolute;
-  right: 8px;
-  top: 8px;
-}
-
-.reference-input {
-  grid-column: 1 / -1;
+.preview-list {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
+  margin-bottom: 12px;
 }
 
-.reference-uploader {
-  grid-column: 1 / -1;
-}
+.preview-item {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 12px;
+  overflow: hidden;
 
-.audio-field {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.audio-preview {
-  width: 100%;
-}
-
-.style-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-@media (max-width: 768px) {
-  .style-grid,
-  .reference-input {
-    grid-template-columns: 1fr;
-    flex-direction: column;
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
   }
+}
+
+.delete-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
 }
 </style>

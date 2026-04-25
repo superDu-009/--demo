@@ -21,6 +21,9 @@ public class ShotAssetRef {
     /** 资产ID */
     private Long assetId;
 
-    /** 资产类型: character/scene/prop */
+    /** 资产类型: character/scene/prop/voice */
     private String assetType;
+
+    /** 创建时间 */
+    private LocalDateTime createTime;
 }

@@ -1,18 +1,15 @@
-// api/ai.ts — 系分第 5.2 节：AI 任务接口
+// api/ai.ts — 兼容旧导出，统一转发到 task 接口
 
-import request from '@/api'
-import type { AiTaskVO, ApiResponse } from '@/types'
+import { taskApi } from '@/api/task'
+import type { BatchTaskStatusRequest } from '@/types'
 
 export const aiApi = {
-  // 获取任务状态：GET /api/ai/task/{taskId}
   getTaskStatus: (taskId: number) =>
-    request.get<never, ApiResponse<AiTaskVO>>(`/ai/task/${taskId}`),
+    taskApi.getStatus(taskId),
 
-  // 获取最新任务：GET /api/ai/task/latest
-  getLatestTask: (shotId: number) =>
-    request.get<never, ApiResponse<AiTaskVO>>('/ai/task/latest', { params: { shotId } }),
+  getLatestTask: (_shotId: number) =>
+    Promise.reject(new Error('最新任务接口已废弃，请改用 taskApi.getStatus 或 taskApi.getBatchStatus')),
 
-  // 获取消耗报告：GET /api/ai/cost-report
-  getCostReport: (params?: { startDate?: string; endDate?: string }) =>
-    request.get('/ai/cost-report', { params })
+  getBatchTaskStatus: (data: BatchTaskStatusRequest) =>
+    taskApi.getBatchStatus(data)
 }

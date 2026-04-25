@@ -1,8 +1,6 @@
-// composables/useTaskPolling.ts — 系分第 8.1 节：AI 任务轮询（三档退避）
-
 import { ref, onUnmounted } from 'vue'
-import { aiApi } from '@/api/ai'
-import type { AiTaskVO } from '@/types'
+import { taskApi } from '@/api/task'
+import { AiTaskStatus, type TaskVO } from '@/types'
 
 // v1.1：三档退避间隔计算（前3次 3s，3-10次 10s，10次后 30s）
 function getPollInterval(count: number): number {
@@ -12,19 +10,18 @@ function getPollInterval(count: number): number {
 }
 
 export interface PollingOptions {
-  // v1.1：任务完成或失败时触发，由调用方根据 task.status 自行处理
-  onDone?: (task: AiTaskVO) => void
+  onProgress?: (task: TaskVO) => void
+  onDone?: (task: TaskVO) => void
 }
 
 export function useTaskPolling() {
-  const task = ref<AiTaskVO | null>(null)
+  const task = ref<TaskVO | null>(null)
   const isPolling = ref(false)
   let timer: number | null = null
   let pollCount = 0
-  const maxPolls = 2400  // v1.1：与 Redis 锁 TTL 对齐（30s × 2400 ≈ 2h）
+  const maxPolls = 2400
 
-  // 启动轮询
-  async function startPolling(shotId: number, options?: PollingOptions) {
+  async function startPolling(taskId: number, options?: PollingOptions) {
     stopPolling()
     isPolling.value = true
     pollCount = 0
@@ -39,11 +36,11 @@ export function useTaskPolling() {
       }
 
       try {
-        const res = await aiApi.getLatestTask(shotId)
+        const res = await taskApi.getStatus(taskId)
         task.value = res.data
+        options?.onProgress?.(res.data)
 
-        // 任务完成或失败 → 停止轮询 → 触发 onDone
-        if (res.data.status === 2 || res.data.status === 3) {
+        if (res.data.status === AiTaskStatus.Success || res.data.status === AiTaskStatus.Failed) {
           stopPolling()
           options?.onDone?.(res.data)
           return
@@ -53,7 +50,6 @@ export function useTaskPolling() {
       }
 
       pollCount++
-      // v1.1：根据轮询次数动态计算间隔（三档退避）
       const interval = getPollInterval(pollCount)
       timer = window.setTimeout(poll, interval)
     }

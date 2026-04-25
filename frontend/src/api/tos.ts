@@ -4,11 +4,11 @@ import request from '@/api'
 import type { PresignRequest, PresignResult, TosCompleteRequest, ApiResponse } from '@/types'
 
 export const tosApi = {
-  // 获取预签名 URL：POST /api/tos/presign
+  // 获取预签名 URL：POST /api/storage/tos/presign
   presign: (data: PresignRequest) =>
-    request.post<never, ApiResponse<PresignResult>>('/tos/presign', data),
+    request.post<never, ApiResponse<PresignResult>>('/storage/tos/presign', data),
 
-  // 通知后端上传完成：POST /api/tos/complete
+  // 通知后端上传完成：POST /api/storage/tos/complete
   complete: (data: TosCompleteRequest) =>
-    request.post('/tos/complete', data)
+    request.post('/storage/tos/complete', data)
 }

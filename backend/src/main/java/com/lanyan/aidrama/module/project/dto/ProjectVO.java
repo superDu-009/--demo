@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 项目视图对象 VO (系分 4.2.1)
+ * 项目视图对象 VO (系分 v1.2 第 7.2 节)
  */
 @Data
 @Schema(description = "项目信息视图")
@@ -21,23 +21,23 @@ public class ProjectVO {
     @Schema(description = "项目描述")
     private String description;
 
-    @Schema(description = "小说文件TOS路径")
+    @Schema(description = "原始小说文件TOS路径")
+    private String novelOriginalTosPath;
+
+    @Schema(description = "解析后纯文本TOS路径")
     private String novelTosPath;
 
-    @Schema(description = "流程配置JSON")
-    private String workflowConfig;
+    @Schema(description = "画面比例")
+    private String ratio;
 
-    @Schema(description = "风格预设JSON")
-    private String stylePreset;
+    @Schema(description = "清晰度")
+    private String definition;
 
-    @Schema(description = "状态: 0-草稿 1-进行中 2-已完成")
-    private Integer status;
+    @Schema(description = "风格")
+    private String style;
 
-    @Schema(description = "执行锁: 0-未执行 1-执行中")
-    private Integer executionLock;
-
-    @Schema(description = "乐观锁版本号")
-    private Integer version;
+    @Schema(description = "风格描述")
+    private String styleDesc;
 
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

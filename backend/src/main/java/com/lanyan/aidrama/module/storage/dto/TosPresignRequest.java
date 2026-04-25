@@ -2,51 +2,27 @@ package com.lanyan.aidrama.module.storage.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 /**
- * 获取预签名上传URL请求DTO (系分 4.7.1)
+ * TOS 预签名上传请求
  */
 @Data
-@Schema(description = "获取预签名上传URL请求参数")
+@Schema(description = "TOS 预签名上传请求")
 public class TosPresignRequest {
 
-    /**
-     * 原始文件名
-     */
+    @Schema(description = "文件名", requiredMode = Schema.RequiredMode.REQUIRED)
     @NotBlank(message = "文件名不能为空")
-    @Schema(description = "原始文件名", requiredMode = Schema.RequiredMode.REQUIRED)
     private String fileName;
 
-    /**
-     * 文件MIME类型，如 image/png、video/mp4
-     */
-    @NotBlank(message = "文件MIME类型不能为空")
-    @Schema(description = "文件MIME类型，如 image/png、video/mp4", requiredMode = Schema.RequiredMode.REQUIRED)
+    @Schema(description = "文件类型(MIME)", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "文件类型不能为空")
     private String contentType;
 
-    /**
-     * 上传来源：frontend-前端上传 / backend-后端内部上传
-     */
-    @NotNull(message = "上传来源不能为空")
-    @Schema(description = "上传来源：frontend-前端上传 / backend-后端内部上传", requiredMode = Schema.RequiredMode.REQUIRED)
-    private UploadSource source;
+    @Schema(description = "来源标识", requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "来源标识不能为空")
+    private String source;
 
-    /**
-     * 关联业务ID，如项目ID、资产ID
-     */
-    @NotNull(message = "关联业务ID不能为空")
-    @Schema(description = "关联业务ID，如项目ID、资产ID", requiredMode = Schema.RequiredMode.REQUIRED)
-    private Long businessId;
-
-    /**
-     * 上传来源枚举
-     */
-    public enum UploadSource {
-        /** 前端上传 */
-        frontend,
-        /** 后端内部上传 */
-        backend
-    }
+    @Schema(description = "业务ID")
+    private String businessId;
 }

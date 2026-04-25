@@ -1,24 +1,18 @@
 package com.lanyan.aidrama.module.storage.dto;
 
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * 预签名URL返回结果DTO
+ * TOS 预签名上传响应
  */
 @Data
+@Schema(description = "TOS 预签名上传响应")
 public class PresignResult {
-    /**
-     * 预签名PUT上传URL
-     */
+
+    @Schema(description = "预签名 PUT 上传 URL")
     private String uploadUrl;
 
-    /**
-     * 文件在TOS中的唯一存储Key
-     */
+    @Schema(description = "文件 Key（上传完成后保存用）")
     private String fileKey;
-
-    /**
-     * URL有效时长（单位：秒）
-     */
-    private Long expireSeconds;
 }

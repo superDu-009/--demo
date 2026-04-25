@@ -1,18 +1,14 @@
-// stores/content.ts — 系分第 7 节：内容状态 Store（Sprint 2 完整实现）
+// stores/content.ts — 内容状态 Store（按项目 → 分集 → 分镜口径收口）
 
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { contentApi } from '@/api/content'
-import type { EpisodeVO, SceneVO, ShotVO, PageResult } from '@/types'
+import type { EpisodeVO, ShotVO } from '@/types'
 
 export const useContentStore = defineStore('content', () => {
   const episodes = ref<EpisodeVO[]>([])
-  const scenes = ref<SceneVO[]>([])
-  const shots = ref<PageResult<ShotVO>>({
-    total: 0, page: 1, size: 20, hasNext: false, list: []
-  })
+  const shots = ref<ShotVO[]>([])
   const currentEpisodeId = ref<number | null>(null)
-  const currentSceneId = ref<number | null>(null)
   const loading = ref(false)
 
   async function fetchEpisodes(projectId: number) {
@@ -20,35 +16,18 @@ export const useContentStore = defineStore('content', () => {
     episodes.value = res.data
   }
 
-  async function fetchScenes(episodeId: number) {
-    const res = await contentApi.listScenes(episodeId)
-    scenes.value = res.data
-  }
-
-  async function fetchShots(sceneId: number, page = 1, size = 20, status?: number) {
+  async function fetchShots(episodeId: number, params?: { promptStatus?: string; imageStatus?: string; videoStatus?: string }) {
     loading.value = true
     try {
-      const res = await contentApi.listShots(sceneId, { page, size, status })
+      const res = await contentApi.listShots(episodeId, params)
       shots.value = res.data
     } finally {
       loading.value = false
     }
   }
 
-  async function batchReview(data: { shotIds: number[]; action: 'approve' | 'reject'; comment?: string }) {
-    return await contentApi.batchReview(data)
-  }
-
-  async function bindAsset(shotId: number, assetId: number, assetType: string) {
-    await contentApi.bindAsset(shotId, { assetId, assetType })
-  }
-
-  async function unbindAsset(shotId: number, assetId: number) {
-    await contentApi.unbindAsset(shotId, assetId)
-  }
-
   return {
-    episodes, scenes, shots, currentEpisodeId, currentSceneId, loading,
-    fetchEpisodes, fetchScenes, fetchShots, batchReview, bindAsset, unbindAsset
+    episodes, shots, currentEpisodeId, loading,
+    fetchEpisodes, fetchShots
   }
 })

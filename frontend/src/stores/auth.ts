@@ -1,54 +1,87 @@
-// stores/auth.ts — 系分第 7.2 节：认证模块（核心 Store）
+// stores/auth.ts — 认证与个人中心状态
 
+import { computed, ref } from 'vue'
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
 import { userApi } from '@/api/user'
+import type { UpdatePasswordPayload, UpdateProfilePayload, UserInfoVO } from '@/types'
 import { storage } from '@/utils/storage'
 
 export const useAuthStore = defineStore('auth', () => {
-  // 从 localStorage 恢复 token（storage 模块内置 TTL 检查）
   const token = ref<string>(storage.get('token') || '')
-  const userInfo = ref<{ id: number; username: string; nickname: string } | null>(null)
+  const userInfo = ref<UserInfoVO | null>(storage.get('user_info') || null)
 
-  // 计算属性：是否已登录
   const isLoggedIn = computed(() => !!token.value)
+  const displayName = computed(() => userInfo.value?.nickname || userInfo.value?.username || '用户')
 
-  // 设置 Token（同时持久化到 localStorage，24h TTL）
-  function setToken(t: string) {
-    token.value = t
-    storage.set('token', t, 24 * 60 * 60 * 1000) // 24h
+  function setToken(nextToken: string) {
+    token.value = nextToken
+    storage.set('token', nextToken, 24 * 60 * 60 * 1000)
   }
 
-  // 设置用户信息
-  function setUserInfo(info: typeof userInfo.value) {
+  function setUserInfo(info: UserInfoVO | null) {
     userInfo.value = info
+    storage.set('user_info', info)
   }
 
-  // 获取用户信息（从后端拉取）
   async function fetchUserInfo() {
     const res = await userApi.getInfo()
-    userInfo.value = {
+    setUserInfo({
       id: res.data.id,
       username: res.data.username,
-      nickname: res.data.nickname
-    }
+      nickname: res.data.nickname,
+      status: res.data.status,
+      avatar: res.data.avatar || res.data.avatarUrl || storage.get('user_avatar') || '',
+      avatarUrl: res.data.avatarUrl || res.data.avatar || ''
+    })
   }
 
-  // 清除认证信息（token + 用户信息）
   function clearAuth() {
     token.value = ''
     userInfo.value = null
     storage.remove('token')
+    storage.remove('user_info')
   }
 
-  // 登出（调用后端接口 + 清除本地状态）
   async function logout() {
-    try { await userApi.logout() } catch {}
+    try {
+      await userApi.logout()
+    } catch {}
     clearAuth()
   }
 
+  async function updateProfile(payload: UpdateProfilePayload) {
+    if (payload.username !== userInfo.value?.username) {
+      await userApi.updateUsername({ username: payload.username })
+    }
+    if (payload.avatar && payload.avatar !== userInfo.value?.avatar) {
+      await userApi.updateAvatar({ avatarUrl: payload.avatar })
+    }
+    const nextInfo: UserInfoVO = {
+      ...(userInfo.value || { id: 0, username: payload.username, nickname: payload.username, status: 1 }),
+      username: payload.username,
+      nickname: payload.username,
+      avatar: payload.avatar || userInfo.value?.avatar || '',
+      avatarUrl: payload.avatar || userInfo.value?.avatarUrl || ''
+    }
+    storage.set('user_avatar', nextInfo.avatar || '')
+    setUserInfo(nextInfo)
+  }
+
+  async function updatePassword(payload: UpdatePasswordPayload) {
+    await userApi.updatePassword(payload)
+  }
+
   return {
-    token, userInfo, isLoggedIn,
-    setToken, setUserInfo, fetchUserInfo, clearAuth, logout
+    token,
+    userInfo,
+    isLoggedIn,
+    displayName,
+    setToken,
+    setUserInfo,
+    fetchUserInfo,
+    clearAuth,
+    logout,
+    updateProfile,
+    updatePassword
   }
 })

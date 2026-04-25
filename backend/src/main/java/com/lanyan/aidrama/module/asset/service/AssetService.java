@@ -6,18 +6,17 @@ import com.lanyan.aidrama.module.asset.dto.*;
 import java.util.List;
 
 /**
- * 资产服务接口 (系分 4.3.2)
- * 负责角色/场景/物品/声音资产 CRUD，支持多参考图
+ * 资产服务接口 (系分 v1.2 第 7.4 节)
  */
 public interface AssetService {
 
     /**
-     * 查项目下某类型资产列表
+     * 查项目下资产列表
      */
     List<AssetVO> listAssets(Long projectId, String assetType);
 
     /**
-     * 创建资产，校验 projectId 归属
+     * 创建资产
      */
     Long createAsset(Long projectId, AssetCreateRequest req);
 
@@ -27,17 +26,42 @@ public interface AssetService {
     void updateAsset(Long id, AssetUpdateRequest req);
 
     /**
-     * 逻辑删除，需检查 shot_asset_ref 是否有关联
+     * 逻辑删除资产（校验是否被分镜绑定）
      */
     void deleteAsset(Long id);
 
     /**
-     * 确认资产（status=1）
+     * 确认资产（需至少有 1 张参考图）
      */
     void confirmAsset(Long id);
 
     /**
-     * 查询资产被哪些分镜引用（分页）
+     * 提取资产（异步，返回 taskId）
+     */
+    Long extractAssets(Long projectId, Long episodeId);
+
+    /**
+     * 查询资产提取任务状态
+     */
+    com.lanyan.aidrama.module.task.dto.TaskVO getExtractTaskStatus(Long projectId);
+
+    /**
+     * 重复资产检测
+     */
+    List<AssetDuplicateVO> getDuplicateAssets(Long projectId);
+
+    /**
+     * 资产关系树
+     */
+    List<AssetTreeNode> getAssetTree(Long projectId);
+
+    /**
+     * 更新资产关系
+     */
+    void updateAssetRelations(Long id, String parentIds);
+
+    /**
+     * 资产引用查询
      */
     PageResult<ShotReferenceVO> getAssetReferences(Long assetId, int page, int size);
 }

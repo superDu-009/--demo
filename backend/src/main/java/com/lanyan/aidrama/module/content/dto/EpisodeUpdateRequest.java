@@ -18,7 +18,4 @@ public class EpisodeUpdateRequest {
 
     @Schema(description = "排序号")
     private Integer sortOrder;
-
-    @Schema(description = "状态: 0-待处理 1-进行中 2-已完成")
-    private Integer status;
 }

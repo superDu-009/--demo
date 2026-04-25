@@ -7,8 +7,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 项目实体类 (对应 project 表，系分 3. DDL 第2张表)
- * 包含 workflow_config 和 style_preset JSON 字段
+ * 项目实体类 (对应 project 表，系分 v1.2 第 5.2 节)
  */
 @Data
 @TableName(value = "project", autoResultMap = true)
@@ -27,26 +26,23 @@ public class Project {
     /** 项目描述 */
     private String description;
 
-    /** 小说文件TOS路径 */
+    /** 原始小说文件TOS路径 */
+    private String novelOriginalTosPath;
+
+    /** 解析后纯文本TOS路径 */
     private String novelTosPath;
 
-    /** 流程配置(JSON数组) */
-    @TableField(typeHandler = JacksonTypeHandler.class)
-    private String workflowConfig;
+    /** 画面比例: 16:9 / 9:16 */
+    private String ratio;
 
-    /** 全局风格预设(JSON) */
-    @TableField(typeHandler = JacksonTypeHandler.class)
-    private String stylePreset;
+    /** 清晰度: 720P / 1080P */
+    private String definition;
 
-    /** 状态: 0-草稿 1-进行中 2-已完成 */
-    private Integer status;
+    /** 风格: 2D次元风/日漫风/国漫风/古风/现代写实/自定义 */
+    private String style;
 
-    /** 执行锁: 0-未执行 1-执行中 */
-    private Integer executionLock;
-
-    /** 乐观锁版本号 (系分 v1.2 新增) */
-    @Version
-    private Integer version;
+    /** 风格描述（自定义风格时使用） */
+    private String styleDesc;
 
     /** 逻辑删除: 0-正常 1-删除 */
     @TableLogic

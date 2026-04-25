@@ -1,4 +1,4 @@
-// types/user.ts — 系分第 6.2 节：用户类型定义
+// types/user.ts — 用户类型定义
 
 // 登录请求参数
 export interface LoginRequest {
@@ -14,10 +14,29 @@ export interface LoginResult {
   nickname: string
 }
 
-// 用户信息 VO
 export interface UserInfoVO {
   id: number
   username: string
   nickname: string
   status: number
+  avatar?: string | null
+  avatarUrl?: string | null
+}
+
+export interface UpdateProfilePayload {
+  username: string
+  avatar?: string
+}
+
+export interface UpdateUsernamePayload {
+  username: string
+}
+
+export interface UpdateAvatarPayload {
+  avatarUrl: string
+}
+
+export interface UpdatePasswordPayload {
+  oldPassword: string
+  newPassword: string
 }

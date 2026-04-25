@@ -92,6 +92,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [url: string]
   'success': [url: string]
+  uploaded: [payload: { url: string; key: string; fileName: string; fileSize: number }]
   'error': [error: Error]
 }>()
 
@@ -161,10 +162,16 @@ const doUpload = async (file: File) => {
       projectDir: props.projectDir,
       maxFileSize: props.maxFileSize,
       allowedTypes: props.allowedTypes,
-      onSuccess: (url) => {
+      onSuccess: (url, key, fileInfo) => {
         fileUrl.value = url
         emit('update:modelValue', url)
         emit('success', url)
+        emit('uploaded', {
+          url,
+          key,
+          fileName: fileInfo.fileName,
+          fileSize: fileInfo.fileSize
+        })
       },
       onError: (error) => {
         emit('error', error)

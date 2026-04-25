@@ -3,8 +3,10 @@ package com.lanyan.aidrama.module.asset.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
- * 资产视图对象 VO (系分 4.3.1)
+ * 资产视图对象 VO (系分 v1.2 第 7.4 节)
  */
 @Data
 @Schema(description = "资产信息视图")
@@ -28,15 +30,18 @@ public class AssetVO {
     @Schema(description = "参考图URL数组JSON")
     private String referenceImages;
 
-    @Schema(description = "风格预设JSON")
-    private String stylePreset;
+    @Schema(description = "父资产ID数组(JSON)")
+    private String parentIds;
 
-    @Schema(description = "状态: 0-草稿 1-已确认 2-已废弃")
-    private Integer status;
+    @Schema(description = "是否子资产: 0-否 1-是")
+    private Integer isSubAsset;
+
+    @Schema(description = "状态: draft/confirmed/deprecated")
+    private String status;
 
     @Schema(description = "创建时间")
-    private java.time.LocalDateTime createTime;
+    private LocalDateTime createTime;
 
     @Schema(description = "更新时间")
-    private java.time.LocalDateTime updateTime;
+    private LocalDateTime updateTime;
 }

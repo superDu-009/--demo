@@ -1,27 +1,19 @@
 package com.lanyan.aidrama.module.aitask.client;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.http.*;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClientException;
-import org.springframework.web.client.RestTemplate;
 
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Doubao 视频生成客户端 (火山引擎方舟 Ark)
- * 模型: doubao-seedance-2-0-260128
- * 接口: POST /api/v3/content/generation/tasks (异步任务模式)
- *       GET  /api/v3/content/generation/tasks/{task_id} (轮询状态)
+ * 异步任务模式：提交任务返回 taskId，查询状态获取视频 URL
  */
 @Slf4j
 @Component
@@ -29,31 +21,21 @@ import java.util.concurrent.TimeoutException;
 public class VideoGenClient {
 
     private final DoubaoConfig doubaoConfig;
-    private final @Qualifier("doubaoRestTemplate") RestTemplate restTemplate;
-    private final ObjectMapper objectMapper;
+    private final ArkApiClient arkApiClient;
 
     /**
      * 提交视频生成任务（异步）
      * @param prompt 提示词
-     * @param firstFrameImage 首帧图片 URL（可选）
-     * @param referenceImages 参考图 URL 列表（可选）
-     * @return 任务 ID
+     * @param firstFrameImage 首帧图片 URL（承接上一分镜时使用）
+     * @param referenceImages 参考图 URL 列表（绑定资产主参考图）
+     * @return 第三方任务 ID
      */
-    @Retryable(
-            value = {RestClientException.class, TimeoutException.class},
-            maxAttempts = 3,
-            backoff = @Backoff(delay = 5000, multiplier = 2)
-    )
-    public String submitVideoTask(String prompt, String firstFrameImage, java.util.List<String> referenceImages) {
+    public String submitVideoTask(String prompt, String firstFrameImage, List<String> referenceImages) {
         log.info("调用 Doubao 视频生成, model: {}, prompt length: {}",
-                doubaoConfig.getVideoModel(), prompt.length());
+                doubaoConfig.getVideoModel(), prompt != null ? prompt.length() : 0);
 
-        ObjectNode requestBody = objectMapper.createObjectNode();
+        ObjectNode requestBody = arkApiClient.getObjectMapper().createObjectNode();
         requestBody.put("model", doubaoConfig.getVideoModel());
-        requestBody.put("generate_audio", true);
-        requestBody.put("ratio", "16:9");
-        requestBody.put("duration", 5);
-        requestBody.put("watermark", false);
 
         // 构建 content 数组
         ArrayNode contentArray = requestBody.putArray("content");
@@ -63,7 +45,7 @@ public class VideoGenClient {
         textNode.put("type", "text");
         textNode.put("text", prompt);
 
-        // 2. 首帧图片
+        // 2. 首帧图片（承接上一分镜）
         if (firstFrameImage != null && !firstFrameImage.isBlank()) {
             ObjectNode imageNode = contentArray.addObject();
             imageNode.put("type", "image_url");
@@ -72,7 +54,7 @@ public class VideoGenClient {
             imageNode.put("role", "first_frame");
         }
 
-        // 3. 参考图
+        // 3. 参考图（绑定资产主参考图）
         if (referenceImages != null) {
             for (String refUrl : referenceImages) {
                 ObjectNode refNode = contentArray.addObject();
@@ -83,62 +65,28 @@ public class VideoGenClient {
             }
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.APPLICATION_JSON);
-        headers.setBearerAuth(doubaoConfig.getApiKey());
+        String response = arkApiClient.postToUrl(
+                arkApiClient.toJson(requestBody),
+                "Doubao 视频生成",
+                doubaoConfig.getVideoApiUrl());
 
-        HttpEntity<String> entity = new HttpEntity<>(requestBody.toString(), headers);
-
-        try {
-            ResponseEntity<String> response = restTemplate.exchange(
-                    doubaoConfig.getVideoApiUrl(), HttpMethod.POST, entity, String.class);
-
-            if (response.getStatusCode() != HttpStatus.OK) {
-                throw new RuntimeException("视频生成 API 返回非 200 状态: " + response.getStatusCode());
-            }
-
-            String taskId = parseTaskId(response.getBody());
-            log.info("视频生成任务已提交, taskId: {}", taskId);
-            return taskId;
-        } catch (RestClientException e) {
-            log.error("Doubao 视频生成调用异常", e);
-            throw e;
-        }
+        String taskId = parseTaskId(response);
+        log.info("视频生成任务已提交, taskId: {}", taskId);
+        return taskId;
     }
 
     /**
      * 查询视频生成任务状态
-     * @param taskId 任务 ID
-     * @return 任务结果: { "status": "pending/running/succeeded/failed", "videoUrl": "...", "error": "..." }
      */
-    @Retryable(
-            value = {RestClientException.class},
-            maxAttempts = 3,
-            backoff = @Backoff(delay = 3000, multiplier = 1)
-    )
     public Map<String, String> queryTaskStatus(String taskId) {
         String url = doubaoConfig.getVideoApiUrl() + "/" + taskId;
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.setBearerAuth(doubaoConfig.getApiKey());
-        HttpEntity<String> entity = new HttpEntity<>(headers);
-
-        ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.GET, entity, String.class);
-        if (response.getStatusCode() != HttpStatus.OK) {
-            throw new RuntimeException("查询任务状态返回非 200: " + response.getStatusCode());
-        }
-
-        return parseTaskResult(response.getBody());
+        String response = arkApiClient.get(url, "Doubao 视频任务查询");
+        return parseTaskResult(response);
     }
 
-    // ============ 内部方法 ============
-
-    /**
-     * 解析创建任务响应，提取 task_id
-     */
     private String parseTaskId(String responseBody) {
         try {
-            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode root = arkApiClient.getObjectMapper().readTree(responseBody);
             JsonNode id = root.get("id");
             if (id != null) {
                 return id.asText();
@@ -150,20 +98,15 @@ public class VideoGenClient {
         }
     }
 
-    /**
-     * 解析任务查询响应
-     * @return map 包含: status, videoUrl(成功时), error(失败时)
-     */
     private Map<String, String> parseTaskResult(String responseBody) {
         try {
-            JsonNode root = objectMapper.readTree(responseBody);
+            JsonNode root = arkApiClient.getObjectMapper().readTree(responseBody);
             String status = root.has("status") ? root.get("status").asText() : "unknown";
 
-            java.util.HashMap<String, String> result = new java.util.HashMap<>();
+            HashMap<String, String> result = new HashMap<>();
             result.put("status", status);
 
             if ("succeeded".equals(status)) {
-                // 从 content 数组中提取视频 URL
                 JsonNode content = root.get("content");
                 if (content != null && content.isArray()) {
                     for (JsonNode item : content) {
@@ -187,13 +130,5 @@ public class VideoGenClient {
             log.error("解析视频任务结果失败, body: {}", responseBody, e);
             throw new RuntimeException("解析视频任务结果失败", e);
         }
-    }
-
-    /**
-     * 防止 API Key 意外泄露到日志
-     */
-    @Override
-    public String toString() {
-        return "VideoGenClient{apiKey='***', model='" + doubaoConfig.getVideoModel() + "'}";
     }
 }

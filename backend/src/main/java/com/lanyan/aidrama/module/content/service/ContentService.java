@@ -1,24 +1,35 @@
 package com.lanyan.aidrama.module.content.service;
 
-import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.lanyan.aidrama.common.PageResult;
 import com.lanyan.aidrama.module.content.dto.*;
 
 import java.util.List;
 
 /**
- * 内容服务接口 (系分 4.4.2)
- * 负责分集/分场/分镜 CRUD、批量审核、资产绑定
+ * 内容服务接口 (系分 v1.2 第 7.3 节)
+ * 负责分集/分镜 CRUD、剧本分析、分镜拆分、AI 生成、草稿、批量操作
  */
 public interface ContentService {
 
+    // ===== 分集相关 =====
+
     /**
-     * 查项目下分集
+     * 查项目下分集列表
      */
     List<EpisodeVO> listEpisodes(Long projectId);
 
     /**
-     * 创建分集，sort_order 自动递增
+     * 剧本分析（异步，返回 taskId）
+     */
+    Long analyzeScript(Long projectId);
+
+    /**
+     * 查询剧本分析状态
+     */
+    ScriptAnalyzeStatusVO getAnalyzeStatus(Long projectId);
+
+    /**
+     * 手动创建分集
      */
     Long createEpisode(Long projectId, EpisodeCreateRequest req);
 
@@ -28,42 +39,29 @@ public interface ContentService {
     void updateEpisode(Long id, EpisodeUpdateRequest req);
 
     /**
-     * 级联逻辑删除（分场→分镜→资产关联）
+     * 逻辑删除分集（级联删除分镜）
      */
     void deleteEpisode(Long id);
 
-    /**
-     * 查分集下分场
-     */
-    List<SceneVO> listScenes(Long episodeId);
+    // ===== 分镜相关 =====
 
     /**
-     * 创建分场
+     * 分镜列表（支持按 promptStatus/imageStatus/videoStatus 过滤）
      */
-    Long createScene(Long episodeId, SceneCreateRequest req);
+    List<ShotVO> listShots(Long episodeId, String promptStatus, String imageStatus, String videoStatus);
 
     /**
-     * 更新分场
+     * 分镜拆分（异步，返回 taskId）
      */
-    void updateScene(Long id, SceneUpdateRequest req);
+    Long splitShots(Long episodeId, Integer duration);
 
     /**
-     * 级联删除分镜及资产关联
+     * 手动创建分镜
      */
-    void deleteScene(Long id);
+    Long createShot(Long episodeId, ShotCreateRequest req);
 
     /**
-     * 分页查分场下分镜，含 assetRefs + currentAiTask
-     */
-    PageResult<com.lanyan.aidrama.module.project.dto.ShotVO> listShots(Long sceneId, int page, int size, Integer status);
-
-    /**
-     * 创建分镜
-     */
-    Long createShot(Long sceneId, ShotCreateRequest req);
-
-    /**
-     * 更新分镜
+     * 更新分镜（提示词、景别、运镜、台词、承接开关、绑定资产）
      */
     void updateShot(Long id, ShotUpdateRequest req);
 
@@ -73,17 +71,44 @@ public interface ContentService {
     void deleteShot(Long id);
 
     /**
-     * 批量审核，返回成功/失败明细
+     * 分镜排序
      */
-    BatchReviewResult batchReviewShots(List<Long> shotIds, String action, String comment);
+    void sortShot(Long id, Integer sortOrder);
 
     /**
-     * 绑定资产到分镜
+     * 保存草稿
      */
-    void bindAssetToShot(Long shotId, Long assetId, String assetType);
+    void saveDraft(Long id, String draftContent);
 
     /**
-     * 解绑分镜资产
+     * 生成提示词（异步，返回 taskId）
      */
-    void unbindAssetFromShot(Long shotId, Long assetId);
+    Long generatePrompt(Long id);
+
+    /**
+     * 生成图片（异步，返回 taskId）
+     */
+    Long generateImage(Long id);
+
+    /**
+     * 生成视频（异步，返回 taskId）
+     */
+    Long generateVideo(Long id);
+
+    // ===== 批量操作 =====
+
+    /**
+     * 批量生成提示词，返回 batchId + taskIds
+     */
+    BatchResultVO batchPrompt(Long episodeId);
+
+    /**
+     * 批量生成图片，返回 batchId + taskIds
+     */
+    BatchResultVO batchImage(Long episodeId);
+
+    /**
+     * 批量生成视频，返回 batchId + taskIds
+     */
+    BatchResultVO batchVideo(Long episodeId);
 }

@@ -1,14 +1,16 @@
 package com.lanyan.aidrama.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import lombok.Data;
 
 import java.time.LocalDateTime;
 
 /**
- * 分集实体类 (对应 episode 表，系分 3. DDL 第4张表)
+ * 分集实体类 (对应 episode 表，系分 v1.2 第 5.3 节)
  */
 @Data
+@TableName(value = "episode", autoResultMap = true)
 public class Episode {
 
     /** 主键ID */
@@ -21,14 +23,24 @@ public class Episode {
     /** 标题 */
     private String title;
 
+    /** 分集摘要 */
+    private String summary;
+
     /** 排序号 */
     private Integer sortOrder;
 
     /** 分集剧本内容 */
     private String content;
 
-    /** 状态: 0-待处理 1-进行中 2-已完成 */
-    private Integer status;
+    /** 关联资产ID数组(JSON) */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private String assetIds;
+
+    /** 解析状态: pending/analyzing/success/failed */
+    private String parseStatus;
+
+    /** 解析失败原因 */
+    private String parseError;
 
     /** 逻辑删除: 0-正常 1-删除 */
     @TableLogic

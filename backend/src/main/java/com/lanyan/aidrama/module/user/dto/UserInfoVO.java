@@ -4,9 +4,10 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
 /**
- * 用户信息响应视图 (系分 4.1.1 GET /api/user/info 响应)
+ * 用户信息视图 (系分 v1.2 第 7.1 节)
  */
 @Data
+@Schema(description = "用户信息")
 public class UserInfoVO {
 
     @Schema(description = "用户ID")
@@ -17,6 +18,9 @@ public class UserInfoVO {
 
     @Schema(description = "昵称")
     private String nickname;
+
+    @Schema(description = "头像URL")
+    private String avatarUrl;
 
     @Schema(description = "状态: 0-禁用 1-启用")
     private Integer status;

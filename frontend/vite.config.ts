@@ -35,6 +35,8 @@ export default defineConfig({
     }
   },
   server: {
+    // 允许内网访问 (绑定 0.0.0.0 而非 localhost)
+    host: true,
     // 开发环境代理，转发 /api 到后端
     proxy: {
       '/api': {

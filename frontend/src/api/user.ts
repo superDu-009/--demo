@@ -1,18 +1,32 @@
-// api/user.ts — 系分第 5.2 节：用户模块接口
+// api/user.ts — 用户模块接口
 
 import request from '@/api'
-import type { LoginRequest, LoginResult, UserInfoVO, ApiResponse } from '@/types'
+import type {
+  ApiResponse,
+  LoginRequest,
+  LoginResult,
+  UpdateAvatarPayload,
+  UpdatePasswordPayload,
+  UpdateUsernamePayload,
+  UserInfoVO
+} from '@/types'
 
 export const userApi = {
-  // 登录：POST /api/user/login
   login: (data: LoginRequest) =>
     request.post<never, ApiResponse<LoginResult>>('/user/login', data),
 
-  // 登出：POST /api/user/logout
   logout: () =>
     request.post('/user/logout'),
 
-  // 获取用户信息：GET /api/user/info
   getInfo: () =>
-    request.get<never, ApiResponse<UserInfoVO>>('/user/info')
+    request.get<never, ApiResponse<UserInfoVO>>('/user/info'),
+
+  updateUsername: (data: UpdateUsernamePayload) =>
+    request.put('/user/username', data),
+
+  updateAvatar: (data: UpdateAvatarPayload) =>
+    request.put('/user/avatar', data),
+
+  updatePassword: (data: UpdatePasswordPayload) =>
+    request.put('/user/password', data)
 }

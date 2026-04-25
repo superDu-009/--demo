@@ -7,8 +7,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 资产实体类 (对应 asset 表，系分 3. DDL 第3张表)
- * 支持多参考图（reference_images JSON数组）
+ * 资产实体类 (对应 asset 表，系分 v1.2 第 5.5 节)
  */
 @Data
 @TableName(value = "asset", autoResultMap = true)
@@ -30,16 +29,23 @@ public class Asset {
     /** AI描述文本 */
     private String description;
 
-    /** 参考图URL数组, 第一个为主图 */
+    /** 参考图URL数组(JSON) */
     @TableField(typeHandler = JacksonTypeHandler.class)
     private String referenceImages;
 
-    /** 风格预设(JSON) */
+    /** 父资产ID数组(JSON) */
     @TableField(typeHandler = JacksonTypeHandler.class)
-    private String stylePreset;
+    private String parentIds;
 
-    /** 状态: 0-草稿 1-已确认 2-已废弃 */
-    private Integer status;
+    /** 是否子资产: 0-否 1-是 */
+    private Integer isSubAsset;
+
+    /** 草稿内容(JSON) */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    private String draftContent;
+
+    /** 状态: draft/confirmed/deprecated */
+    private String status;
 
     /** 逻辑删除: 0-正常 1-删除 */
     @TableLogic

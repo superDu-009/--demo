@@ -12,7 +12,7 @@ export interface UploadOptions {
   maxFileSize?: number       // 默认 50MB
   allowedTypes?: string[]    // 默认 ['image/png', 'image/jpeg', 'video/mp4', 'text/plain']
   onProgress?: (percent: number) => void // 进度回调
-  onSuccess?: (accessUrl: string, key: string) => void // 成功回调
+  onSuccess?: (accessUrl: string, key: string, fileInfo: { fileName: string; fileSize: number }) => void // 成功回调
   onError?: (error: Error) => void // 失败回调
 }
 
@@ -86,7 +86,10 @@ export function useTosUpload() {
         }
       }
 
-      options.onSuccess?.(presignResult.accessUrl, presignResult.fileKey)
+      options.onSuccess?.(presignResult.accessUrl, presignResult.fileKey, {
+        fileName: file.name,
+        fileSize: file.size
+      })
       return presignResult.accessUrl
     } catch (error: any) {
       // 预签名过期 → 重试最多3次，避免无限递归

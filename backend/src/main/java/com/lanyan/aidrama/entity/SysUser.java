@@ -6,8 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 用户实体类 (对应 sys_user 表，系分 3. DDL 第1张表)
- * 用于存储用户认证信息
+ * 用户实体类 (对应 sys_user 表，系分 v1.2 第 5.1 节)
  */
 @Data
 @TableName("sys_user")
@@ -25,6 +24,9 @@ public class SysUser {
 
     /** 昵称 */
     private String nickname;
+
+    /** 头像URL */
+    private String avatarUrl;
 
     /** 状态: 0-禁用 1-启用 */
     private Integer status;

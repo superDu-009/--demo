@@ -1,340 +1,114 @@
 package com.lanyan.aidrama.module.storage.service;
 
-import com.lanyan.aidrama.config.TosConfig;
-import com.lanyan.aidrama.module.storage.dto.PresignResult;
-import com.lanyan.aidrama.module.storage.dto.TosCompleteRequest;
+import com.lanyan.aidrama.common.BusinessException;
+import com.lanyan.aidrama.common.ErrorCode;
 import com.lanyan.aidrama.common.exception.TosException;
+import com.lanyan.aidrama.config.TosConfig;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
-import software.amazon.awssdk.core.ResponseBytes;
-import software.amazon.awssdk.core.sync.RequestBody;
+import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
+import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
+import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.*;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
-import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
-import java.io.InputStream;
-import java.io.IOException;
-import java.net.HttpURLConnection;
+
 import java.net.URI;
-import java.net.URL;
 import java.time.Duration;
-import java.util.UUID;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.concurrent.ThreadLocalRandom;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 
 /**
- * 火山引擎TOS存储服务类
- * 核心功能：
- * 1. 生成预签名上传URL
- * 2. 上传完成回调校验
- * 3. 字节/URL上传
- * 4. 文件删除
+ * TOS 存储服务 (系分 v1.2 第 7.6 节)
+ * 使用 AWS S3 兼容接口访问火山 TOS
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class TosService {
 
-    private final S3Client s3Client;
     private final TosConfig tosConfig;
-    private final S3Presigner s3Presigner;
-
-    // 预签名URL默认有效期：1小时
-    private static final long DEFAULT_EXPIRE_SECONDS = 3600L;
-
-    // 从URL上传时的最大文件大小限制：100MB
-    private static final int MAX_DOWNLOAD_SIZE = 100 * 1024 * 1024;
-
-    // HTTP连接超时时间：30秒
-    private static final int CONNECT_TIMEOUT = 30000;
-
-    // HTTP读取超时时间：5分钟
-    private static final int READ_TIMEOUT = 300000;
 
     /**
-     * 生成PUT预签名上传URL
-     * @param fileName 原始文件名
-     * @param contentType 文件MIME类型
-     * @param source 上传来源：frontend-前端上传，backend-后端内部上传
-     * @param businessId 关联业务ID
-     * @return 预签名结果，包含uploadUrl、fileKey、expireSeconds
+     * 生成预签名 PUT 上传 URL
+     * @param fileName 文件名
+     * @param contentType 文件类型
+     * @param source 来源标识
+     * @param businessId 业务ID
+     * @return PresignResult（包含上传 URL 和文件 Key）
      */
-    public PresignResult generatePresignUrl(String fileName, String contentType, String source, Long businessId) {
-        try {
-            /**
-             * filekey生成规则：{source}/{businessId}/{date}/{fileType}/{随机8位数字}_{原文件名}
-             * 1. source: frontend-前端上传，backend-后端内部上传
-             * 2. businessId: 关联业务ID（如项目ID）
-             * 3. 日期：yyyyMMdd格式（如20260421）
-             * 4. 文件类型：根据ContentType前缀判断，image/*→image，video/*→video，text/application/*→document，其他→other
-             * 5. 随机8位：0-99999999的纯数字，补前导零到8位
-             * 6. 原文件名：转义特殊字符（空格、中文等）
-             */
-            // 1. 日期处理
-            String date = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
-            // 2. 文件类型判断
-            String fileType = "other";
-            if (contentType != null) {
-                if (contentType.startsWith("image/")) {
-                    fileType = "image";
-                } else if (contentType.startsWith("video/")) {
-                    fileType = "video";
-                } else if (contentType.startsWith("text/") || contentType.startsWith("application/")) {
-                    fileType = "document";
-                }
-            }
-            // 3. 生成8位随机数字
-            int randomNum = ThreadLocalRandom.current().nextInt(100000000);
-            String randomStr = String.format("%08d", randomNum);
-            // 4. 原文件名转义特殊字符
-            String encodedFileName = URLEncoder.encode(fileName, StandardCharsets.UTF_8).replace("+", "%20");
-            // 拼接最终fileKey
-            String fileKey = String.format("%s/%s/%s/%s/%s_%s", source, businessId, date, fileType, randomStr, encodedFileName);
+    public com.lanyan.aidrama.module.storage.dto.PresignResult generatePresignUrlWithUser(
+            String fileName, String contentType, String source, String businessId, Long userId) {
 
-            // 构建预签名请求
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                    .bucket(tosConfig.getBucket())
-                    .key(fileKey)
-                    .contentType(contentType)
-                    .build();
+        String fileKey = buildFileKey(source, businessId, userId, fileName);
 
-            PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofSeconds(DEFAULT_EXPIRE_SECONDS))
-                    .putObjectRequest(putObjectRequest)
-                    .build();
+        // 构建 TOS 客户端
+        S3Presigner presigner = S3Presigner.builder()
+                .endpointOverride(URI.create(tosConfig.getEndpoint()))
+                .region(Region.of(tosConfig.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(tosConfig.getAccessKey(), tosConfig.getSecretKey())))
+                .build();
 
-            // 生成预签名URL
-            URL presignedUrl = s3Presigner.presignPutObject(presignRequest).url();
+        // 生成预签名 PUT 上传 URL，有效期 1 小时
+        PutObjectPresignRequest presignRequest = PutObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(60))
+                .putObjectRequest(PutObjectRequest.builder()
+                        .bucket(tosConfig.getBucket())
+                        .key(fileKey)
+                        .contentType(contentType)
+                        .build())
+                .build();
 
-            // 封装返回结果
-            PresignResult result = new PresignResult();
-            result.setUploadUrl(presignedUrl.toString());
-            result.setFileKey(fileKey);
-            result.setExpireSeconds(DEFAULT_EXPIRE_SECONDS);
+        PresignedPutObjectRequest presignedRequest = presigner.presignPutObject(presignRequest);
 
-            log.info("生成TOS预签名URL成功，fileKey: {}", fileKey);
-            return result;
-        } catch (Exception e) {
-            log.error("生成TOS预签名URL失败，fileName: {}, source: {}", fileName, source, e);
-            throw new TosException(51101, "生成上传链接失败：" + e.getMessage());
-        }
+        com.lanyan.aidrama.module.storage.dto.PresignResult result =
+                new com.lanyan.aidrama.module.storage.dto.PresignResult();
+        result.setUploadUrl(presignedRequest.url().toString());
+        result.setFileKey(fileKey);
+        return result;
     }
 
     /**
-     * 上传完成回调校验
-     * 1. 校验文件是否真实存在于TOS
-     * 2. 校验文件大小是否匹配
-     * @param req 上传完成请求
-     * @return 文件公开访问URL
+     * 上传完成通知：校验 TOS 文件真实存在，返回公网 URL
      */
-    public String completeUpload(TosCompleteRequest req) {
+    public String completeUpload(com.lanyan.aidrama.module.storage.dto.TosCompleteRequest req) {
+        // 校验文件 key 归属
+        if (!req.getFileKey().startsWith(buildPrefix(req.getSource(), req.getUserId()))) {
+            throw new BusinessException(40102, "文件归属校验失败");
+        }
+
+        // 使用 S3 客户端校验文件存在
+        S3Client s3Client = S3Client.builder()
+                .endpointOverride(URI.create(tosConfig.getEndpoint()))
+                .region(Region.of(tosConfig.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(tosConfig.getAccessKey(), tosConfig.getSecretKey())))
+                .build();
+
         try {
-            // 1. HEAD请求校验文件是否存在
-            HeadObjectRequest headRequest = HeadObjectRequest.builder()
+            s3Client.headObject(builder -> builder
                     .bucket(tosConfig.getBucket())
                     .key(req.getFileKey())
-                    .build();
-
-            HeadObjectResponse headResponse = s3Client.headObject(headRequest);
-
-            // 2. 校验文件大小是否匹配（可选，前端传递时校验）
-            if (req.getFileSize() != null && !headResponse.contentLength().equals(req.getFileSize())) {
-                log.error("TOS文件大小校验失败，fileKey: {}, 期望大小: {}, 实际大小: {}", 
-                        req.getFileKey(), req.getFileSize(), headResponse.contentLength());
-                throw new TosException(51102, "文件校验失败：大小不匹配");
-            }
-
-            // 3. 生成公开访问URL（如果桶配置了公共读）
-            String publicUrl = getPublicUrl(req.getFileKey());
-
-            log.info("TOS上传完成校验成功，fileKey: {}, publicUrl: {}", req.getFileKey(), publicUrl);
-            return publicUrl;
-        } catch (NoSuchKeyException e) {
-            log.error("TOS文件不存在，fileKey: {}", req.getFileKey(), e);
-            throw new TosException(51102, "文件校验失败：文件不存在或链接已过期");
+                    .build());
         } catch (Exception e) {
-            log.error("TOS上传完成校验失败，fileKey: {}", req.getFileKey(), e);
-            throw new TosException(51102, "文件校验失败：" + e.getMessage());
+            throw new TosException("文件在 TOS 中不存在: " + req.getFileKey());
         }
+
+        // 返回公网可访问 URL
+        return "https://" + tosConfig.getBucket() + "." + tosConfig.getEndpoint().replace("https://", "").replace("tos-s3-", "tos-") + "/" + req.getFileKey();
     }
 
     /**
-     * 从字节数组上传文件到TOS
-     * @param data 字节数组
-     * @param targetKey 目标存储Key
-     * @return 公开访问URL
+     * 构建文件 Key 路径
      */
-    public String uploadFromBytes(byte[] data, String targetKey) {
-        try {
-            PutObjectRequest putRequest = PutObjectRequest.builder()
-                    .bucket(tosConfig.getBucket())
-                    .key(targetKey)
-                    .build();
-
-            s3Client.putObject(putRequest, RequestBody.fromBytes(data));
-            log.info("TOS字节上传成功，targetKey: {}", targetKey);
-            return getPublicUrl(targetKey);
-        } catch (Exception e) {
-            log.error("TOS字节上传失败，targetKey: {}", targetKey, e);
-            throw new TosException(51103, "文件上传失败：" + e.getMessage());
-        }
+    private String buildFileKey(String source, String businessId, Long userId, String fileName) {
+        return String.format("%s/%s/%s/%s_%s", buildPrefix(source, userId), source, businessId, userId, fileName);
     }
 
-    /**
-     * 从第三方URL下载文件并上传到TOS
-     * @param sourceUrl 源文件URL
-     * @param targetKey 目标存储Key
-     * @return 公开访问URL
-     */
-    public String uploadFromUrl(String sourceUrl, String targetKey) {
-        try (InputStream in = openConnectionWithTimeout(sourceUrl)) {
-            byte[] data = in.readNBytes(MAX_DOWNLOAD_SIZE);
-            if (data.length >= MAX_DOWNLOAD_SIZE) {
-                throw new TosException(51103, "下载源文件失败：文件大小超过100MB限制");
-            }
-            return uploadFromBytes(data, targetKey);
-        } catch (TosException e) {
-            throw e;
-        } catch (IOException e) {
-            log.error("从URL下载文件失败，sourceUrl: {}", sourceUrl, e);
-            throw new TosException(51103, "下载源文件失败：" + e.getMessage());
-        }
-    }
-
-    /**
-     * 打开带超时的HTTP连接
-     */
-    private InputStream openConnectionWithTimeout(String sourceUrl) throws IOException {
-        HttpURLConnection connection = (HttpURLConnection) URI.create(sourceUrl).toURL().openConnection();
-        connection.setConnectTimeout(CONNECT_TIMEOUT);
-        connection.setReadTimeout(READ_TIMEOUT);
-        connection.setRequestMethod("GET");
-
-        int responseCode = connection.getResponseCode();
-        if (responseCode < 200 || responseCode >= 300) {
-            throw new IOException("HTTP " + responseCode + " from " + sourceUrl);
-        }
-
-        String contentType = connection.getContentType();
-        if (contentType != null && !isValidContentType(contentType)) {
-            throw new IOException("不支持的内容类型: " + contentType);
-        }
-
-        return connection.getInputStream();
-    }
-
-    /**
-     * 校验内容类型是否允许下载
-     */
-    private boolean isValidContentType(String contentType) {
-        return contentType.startsWith("image/")
-                || contentType.startsWith("video/")
-                || contentType.startsWith("text/")
-                || contentType.startsWith("application/");
-    }
-
-    /**
-     * 从TOS下载文件内容为字符串（用于小说等文本文件）
-     * @param key 文件Key
-     * @return 文件文本内容
-     */
-    public String downloadAsString(String key) {
-        try {
-            GetObjectRequest getRequest = GetObjectRequest.builder()
-                    .bucket(tosConfig.getBucket())
-                    .key(key)
-                    .build();
-
-            ResponseBytes<GetObjectResponse> responseBytes = s3Client.getObjectAsBytes(getRequest);
-            String content = responseBytes.asUtf8String();
-
-            if (content == null || content.isBlank()) {
-                throw new TosException(51105, "文件内容为空");
-            }
-
-            log.info("TOS文件下载成功, key: {}, size: {} bytes", key, responseBytes.asByteArray().length);
-            return content;
-        } catch (NoSuchKeyException e) {
-            log.error("TOS文件不存在, key: {}", key, e);
-            throw new TosException(51105, "文件不存在：" + e.getMessage());
-        } catch (Exception e) {
-            log.error("TOS文件下载失败, key: {}", key, e);
-            throw new TosException(51105, "文件下载失败：" + e.getMessage());
-        }
-    }
-
-    /**
-     * 生成GET预签名下载URL
-     * @param key 文件Key
-     * @param expireSeconds 有效期（秒），默认1小时
-     * @return 预签名下载URL
-     */
-    public String generateDownloadUrl(String key, Long expireSeconds) {
-        try {
-            long expiry = expireSeconds != null ? expireSeconds : DEFAULT_EXPIRE_SECONDS;
-
-            GetObjectRequest getRequest = GetObjectRequest.builder()
-                    .bucket(tosConfig.getBucket())
-                    .key(key)
-                    .build();
-
-            GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
-                    .signatureDuration(Duration.ofSeconds(expiry))
-                    .getObjectRequest(getRequest)
-                    .build();
-
-            URL presignedUrl = s3Presigner.presignGetObject(presignRequest).url();
-            log.info("生成TOS预签名下载URL成功, key: {}", key);
-            return presignedUrl.toString();
-        } catch (Exception e) {
-            log.error("生成TOS预签名下载URL失败, key: {}", key, e);
-            throw new TosException(51106, "生成下载链接失败：" + e.getMessage());
-        }
-    }
-
-    /**
-     * 删除TOS文件
-     * @param key 文件Key
-     */
-    public void deleteFile(String key) {
-        try {
-            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
-                    .bucket(tosConfig.getBucket())
-                    .key(key)
-                    .build();
-            s3Client.deleteObject(deleteRequest);
-            log.info("TOS文件删除成功，key: {}", key);
-        } catch (Exception e) {
-            log.error("TOS文件删除失败，key: {}", key, e);
-            throw new TosException(51104, "文件删除失败：" + e.getMessage());
-        }
-    }
-
-    /**
-     * 获取文件后缀名
-     * @param fileName 文件名
-     * @return 后缀名（包含.）
-     */
-    private String getFileSuffix(String fileName) {
-        if (fileName == null || !fileName.contains(".")) {
-            return "";
-        }
-        return fileName.substring(fileName.lastIndexOf("."));
-    }
-
-    /**
-     * 生成公开访问URL
-     * @param key 文件Key
-     * @return 公开URL
-     */
-    private String getPublicUrl(String key) {
-        return String.format("%s/%s/%s", 
-                tosConfig.getEndpoint().replace("https://", "https://" + tosConfig.getBucket() + "."),
-                tosConfig.getRegion(), key);
+    private String buildPrefix(String source, Long userId) {
+        return String.format("users/%d", userId);
     }
 }

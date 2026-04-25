@@ -3,22 +3,21 @@ package com.lanyan.aidrama.module.asset.dto;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 
+import java.time.LocalDateTime;
+
 /**
- * 分镜引用视图 (系分 4.3.1 资产引用查询)
+ * 分镜引用视图对象
  */
 @Data
-@Schema(description = "分镜引用信息")
+@Schema(description = "资产被分镜引用信息")
 public class ShotReferenceVO {
 
     @Schema(description = "分镜ID")
     private Long shotId;
 
-    @Schema(description = "所属分场ID")
-    private Long sceneId;
-
     @Schema(description = "所属分集ID")
     private Long episodeId;
 
-    @Schema(description = "分镜状态")
-    private Integer shotStatus;
+    @Schema(description = "创建时间")
+    private LocalDateTime createTime;
 }

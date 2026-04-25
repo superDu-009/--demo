@@ -6,7 +6,7 @@ import lombok.Data;
 import java.time.LocalDateTime;
 
 /**
- * 分集视图对象 VO (系分 4.4.1)
+ * 分集视图对象 VO (系分 v1.2 第 7.3 节)
  */
 @Data
 @Schema(description = "分集信息视图")
@@ -21,14 +21,20 @@ public class EpisodeVO {
     @Schema(description = "标题")
     private String title;
 
+    @Schema(description = "分集摘要")
+    private String summary;
+
     @Schema(description = "排序号")
     private Integer sortOrder;
 
     @Schema(description = "分集剧本内容")
     private String content;
 
-    @Schema(description = "状态: 0-待处理 1-进行中 2-已完成")
-    private Integer status;
+    @Schema(description = "解析状态: pending/analyzing/success/failed")
+    private String parseStatus;
+
+    @Schema(description = "解析失败原因")
+    private String parseError;
 
     @Schema(description = "创建时间")
     private LocalDateTime createTime;

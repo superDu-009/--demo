@@ -1,386 +1,380 @@
-<!-- components/Layout/AppLayout.vue — 主布局组件
-     系分第 2 节项目结构：包含顶部导航 + 内容区域 -->
 <template>
   <el-container class="app-layout">
-    <!-- 左侧霓虹导航栏 -->
     <el-aside class="sidebar" width="220px">
       <div class="sidebar-logo" @click="router.push({ name: 'ProjectList' })">
-        <el-icon :size="36" class="logo-icon text-neon"><VideoPlay /></el-icon>
+        <el-icon :size="34" class="text-neon"><VideoPlay /></el-icon>
+        <span>AI漫剧生产平台</span>
       </div>
-        <div class="sidebar-menu">
-            <el-tooltip 
-              v-for="item in menuList" 
-              :key="item.path"
-              :disabled="item.name === 'ProjectList' || !!$route.params.id"
-              content="请先选择一个项目进入详情页"
-              placement="right"
-            >
-              <div 
-                class="menu-item"
-                :class="{ active: $route.name === item.name, disabled: item.name !== 'ProjectList' && !$route.params.id }"
-                @click="handleMenuClick(item)"
-              >
-                <div class="menu-indicator"></div>
-                <el-icon class="menu-icon"><component :is="item.icon" /></el-icon>
-                <span class="menu-title">{{ item.title }}</span>
-              </div>
-            </el-tooltip>
-        </div>
-       <div class="sidebar-footer">
-        <div class="menu-item" @click="handleLogout">
-          <div class="menu-indicator"></div>
-          <el-icon class="menu-icon"><SwitchButton /></el-icon>
-          <span class="menu-title">退出登录</span>
+
+      <div class="sidebar-menu">
+        <div
+          v-for="item in menuList"
+          :key="item.name"
+          class="menu-item"
+          :class="{ active: route.name === item.name, disabled: item.requiresProject && !route.params.id }"
+          @click="handleMenuClick(item)"
+        >
+          <el-icon><component :is="item.icon" /></el-icon>
+          <span>{{ item.title }}</span>
         </div>
       </div>
     </el-aside>
 
-    <!-- 主内容区域 -->
     <el-container class="main-container">
-      <!-- 顶部状态栏 -->
       <el-header class="app-header">
-        <div class="header-left">
-          <h1 class="page-title text-neon">{{ currentPageTitle }}</h1>
+        <div>
+          <h1 class="page-title text-neon">{{ pageTitle }}</h1>
+          <p class="page-subtitle">{{ pageSubtitle }}</p>
         </div>
-        <div class="header-right">
-          <!-- 用户信息显示 -->
-          <div class="user-info">
-            <el-avatar :size="36" class="user-avatar">
-              {{ (authStore.userInfo?.nickname || authStore.userInfo?.username || '用户').charAt(0) }}
+
+        <el-dropdown trigger="click">
+          <div class="user-entry">
+            <el-avatar :size="38" :src="authStore.userInfo?.avatar || undefined">
+              {{ authStore.displayName.charAt(0) }}
             </el-avatar>
-            <span class="user-name">{{ authStore.userInfo?.nickname || authStore.userInfo?.username || '用户' }}</span>
+            <div>
+              <strong>{{ authStore.displayName }}</strong>
+              <span>个人中心</span>
+            </div>
           </div>
-        </div>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click="profileDialogVisible = true">个人中心</el-dropdown-item>
+              <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </el-header>
 
-      <!-- 内容区域 -->
       <el-main class="app-main">
-        <!-- 路由出口：子路由页面在此渲染 -->
         <router-view />
       </el-main>
     </el-container>
+
+    <el-dialog v-model="profileDialogVisible" title="个人中心" width="520px" destroy-on-close>
+      <el-form ref="profileFormRef" :model="profileForm" :rules="profileRules" label-width="84px">
+        <el-form-item label="头像">
+          <div class="avatar-field">
+            <el-avatar :size="64" :src="profileForm.avatar || undefined">
+              {{ (profileForm.username || authStore.displayName).charAt(0) }}
+            </el-avatar>
+            <TosUpload
+              v-model="profileForm.avatar"
+              :project-id="0"
+              file-type="other"
+              button-text="上传头像"
+              tip-text="支持 png/jpg/webp"
+              accept=".png,.jpg,.jpeg,.webp"
+              :allowed-types="['image/png', 'image/jpeg', 'image/webp']"
+              :max-file-size="5 * 1024 * 1024"
+              :show-preview="false"
+            />
+          </div>
+        </el-form-item>
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="profileForm.username" maxlength="32" />
+        </el-form-item>
+        <el-divider>修改密码</el-divider>
+        <el-form-item label="旧密码" prop="oldPassword">
+          <el-input v-model="profileForm.oldPassword" type="password" show-password />
+        </el-form-item>
+        <el-form-item label="新密码" prop="newPassword">
+          <el-input v-model="profileForm.newPassword" type="password" show-password />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="profileDialogVisible = false">取消</el-button>
+        <el-button class="btn-gradient" :loading="profileSaving" @click="submitProfile">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog
+      v-model="loginDialogVisible"
+      title="登录已过期"
+      width="420px"
+      :close-on-click-modal="false"
+      :show-close="false"
+    >
+      <el-form ref="loginFormRef" :model="loginForm" :rules="loginRules" label-position="top">
+        <el-form-item label="用户名" prop="username">
+          <el-input v-model="loginForm.username" />
+        </el-form-item>
+        <el-form-item label="密码" prop="password">
+          <el-input v-model="loginForm.password" type="password" show-password @keyup.enter="submitExpiredLogin" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button class="btn-gradient" :loading="loginSubmitting" @click="submitExpiredLogin">重新登录</el-button>
+      </template>
+    </el-dialog>
   </el-container>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { 
-  VideoPlay, 
-  FolderOpened, 
-  Picture, 
-  Grid, 
-  Film, 
-  DataAnalysis, 
-  SwitchButton 
-} from '@element-plus/icons-vue'
+import type { FormInstance, FormRules } from 'element-plus'
+import { Collection, Film, Picture, SwitchButton, VideoPlay } from '@element-plus/icons-vue'
+import TosUpload from '@/components/Common/TosUpload.vue'
+import { AUTH_EXPIRED_EVENT } from '@/utils/auth-events'
 import { useAuthStore } from '@/stores/auth'
+import { userApi } from '@/api/user'
 
 const router = useRouter()
 const route = useRoute()
-// 引入认证 Store
 const authStore = useAuthStore()
 
-// 菜单列表
+const profileDialogVisible = ref(false)
+const loginDialogVisible = ref(false)
+const profileSaving = ref(false)
+const loginSubmitting = ref(false)
+const profileFormRef = ref<FormInstance>()
+const loginFormRef = ref<FormInstance>()
+
 const menuList = [
-  {
-    name: 'ProjectList',
-    path: '/projects',
-    title: '项目管理',
-    icon: FolderOpened
-  },
-  {
-    name: 'AssetLibrary',
-    path: '/projects/:id/assets',
-    title: '素材中心',
-    icon: Picture
-  },
-  {
-    name: 'WorkflowEditor',
-    path: '/projects/:id/workflow',
-    title: '工作流配置',
-    icon: Grid
-  },
-  {
-    name: 'ShotWorkbench',
-    path: '/projects/:id/shots',
-    title: '分镜制作',
-    icon: Film
-  },
-  {
-    name: 'ApiCost',
-    path: '/projects/:id/cost',
-    title: '数据统计',
-    icon: DataAnalysis
-  }
+  { name: 'ProjectList', title: '项目管理', icon: Collection, requiresProject: false },
+  { name: 'ScriptPreview', title: '剧本预览', icon: Picture, requiresProject: true },
+  { name: 'ShotWorkbench', title: '分镜工作台', icon: Film, requiresProject: true },
+  { name: 'AssetLibrary', title: '资产库', icon: Picture, requiresProject: true }
 ]
 
-// 当前页面标题
-const currentPageTitle = computed(() => {
-  const currentMenu = menuList.find(item => item.name === route.name)
-  return currentMenu?.title || 'AI漫剧生产平台'
+const pageTitle = computed(() => {
+  const item = menuList.find(entry => entry.name === route.name)
+  return item?.title || 'AI漫剧生产平台'
 })
 
-// 处理菜单点击
-const handleMenuClick = (item: any) => {
-  // 项目管理不需要参数，直接跳转
-  if (item.name === 'ProjectList') {
-    router.push({ name: item.name })
-    return
-  }
+const pageSubtitle = computed(() => {
+  if (route.name === 'ProjectList') return '上传小说、设置全局参数，并进入项目详情。'
+  return '严格按 PRD 保留三段式主流程：剧本预览、分镜工作台、资产库。'
+})
 
-  // 其他菜单需要项目ID参数
-  const projectId = route.params.id
-  if (!projectId) {
-    ElMessage.warning('请先选择一个项目进入详情页')
-    return
-  }
+const profileForm = reactive({
+  username: '',
+  avatar: '',
+  oldPassword: '',
+  newPassword: ''
+})
 
-  // 有ID的话正常跳转
-  router.push({ name: item.name, params: { id: projectId } })
+const loginForm = reactive({
+  username: '',
+  password: ''
+})
+
+const profileRules: FormRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  newPassword: [{ min: 6, message: '新密码至少 6 位', trigger: 'blur' }]
 }
 
-// 处理登出：清除认证状态后跳转登录页
+const loginRules: FormRules = {
+  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
+}
+
+const handleMenuClick = (item: { name: string; requiresProject: boolean }) => {
+  if (item.requiresProject && !route.params.id) {
+    ElMessage.warning('请先选择项目')
+    return
+  }
+  if (item.name === 'ProjectList') {
+    router.push({ name: 'ProjectList' })
+    return
+  }
+  router.push({ name: item.name, params: { id: route.params.id } })
+}
+
+const fillProfileForm = () => {
+  profileForm.username = authStore.userInfo?.username || ''
+  profileForm.avatar = authStore.userInfo?.avatar || ''
+  profileForm.oldPassword = ''
+  profileForm.newPassword = ''
+}
+
+const submitProfile = async () => {
+  const valid = await profileFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  profileSaving.value = true
+  try {
+    await authStore.updateProfile({
+      username: profileForm.username.trim(),
+      avatar: profileForm.avatar || undefined
+    })
+    if (profileForm.oldPassword && profileForm.newPassword) {
+      await authStore.updatePassword({
+        oldPassword: profileForm.oldPassword,
+        newPassword: profileForm.newPassword
+      })
+    }
+    ElMessage.success('个人信息已更新')
+    profileDialogVisible.value = false
+  } finally {
+    profileSaving.value = false
+  }
+}
+
 const handleLogout = async () => {
   await authStore.logout()
-  ElMessage.success('已退出登录')
   router.push({ name: 'Login' })
 }
+
+const submitExpiredLogin = async () => {
+  const valid = await loginFormRef.value?.validate().catch(() => false)
+  if (!valid) return
+  loginSubmitting.value = true
+  try {
+    const res = await userApi.login(loginForm)
+    authStore.setToken(res.data.token)
+    authStore.setUserInfo({
+      id: res.data.userId,
+      username: res.data.username,
+      nickname: res.data.nickname,
+      status: 1,
+      avatar: authStore.userInfo?.avatar || ''
+    })
+    loginDialogVisible.value = false
+    loginForm.password = ''
+    ElMessage.success(`欢迎你，${res.data.nickname || res.data.username}~`)
+  } finally {
+    loginSubmitting.value = false
+  }
+}
+
+const handleAuthExpired = () => {
+  loginDialogVisible.value = true
+  loginForm.username = authStore.userInfo?.username || ''
+  loginForm.password = ''
+}
+
+onMounted(async () => {
+  if (!authStore.userInfo && authStore.token) {
+    await authStore.fetchUserInfo().catch(() => undefined)
+  }
+  fillProfileForm()
+  window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired)
+})
 </script>
 
 <style scoped lang="scss">
 .app-layout {
-  height: 100vh;
-  background-color: $bg-page;
-  display: flex;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(100, 108, 255, 0.22), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.16), transparent 26%),
+    $bg-page;
 }
 
-// 左侧导航栏（展开状态）
 .sidebar {
-  background: rgba(22, 24, 38, 0.9);
-  backdrop-filter: blur(12px);
-  border-right: 1px solid rgba(100, 108, 255, 0.2);
-  height: 100vh;
-  width: 220px;
-  position: fixed;
-  left: 0;
-  top: 0;
-  z-index: 1000;
+  background: rgba(14, 16, 28, 0.94);
+  border-right: 1px solid rgba(100, 108, 255, 0.18);
+  padding: 20px 16px;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: $text-primary;
+  font-size: 16px;
+  font-weight: 700;
+  margin-bottom: 28px;
+  cursor: pointer;
+}
+
+.sidebar-menu {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  padding: 20px 16px;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  gap: 10px;
+}
 
-  &:hover {
-    box-shadow: 0 0 30px rgba(100, 108, 255, 0.25);
-    border-right-color: $border-glow-color;
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &.active {
+    color: #fff;
+    background: $primary-gradient;
+    box-shadow: 0 12px 28px rgba(100, 108, 255, 0.28);
   }
 
-  // Logo区域
-  .sidebar-logo {
-    margin-bottom: 40px;
-    cursor: pointer;
-    padding: 12px 16px;
-    border-radius: 12px;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    user-select: none;
-
-    &:hover {
-      background: rgba(100, 108, 255, 0.1);
-      box-shadow: 0 0 20px rgba(100, 108, 255, 0.2);
-      padding-left: 20px;
-    }
-
-    &:active {
-      transform: scale(0.98);
-    }
-
-    .logo-icon {
-      animation: pulse 2s infinite;
-      font-size: 32px;
-    }
-
-    .logo-text {
-      font-size: 18px;
-      font-weight: 700;
-      background: $primary-gradient;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-    }
-  }
-
-  // 菜单区域
-  .sidebar-menu {
-    flex: 1;
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  // 底部区域
-  .sidebar-footer {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: auto;
-  }
-
-  // 菜单项
-  .menu-item {
-    position: relative;
-    width: 100%;
-    height: 52px;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 0 16px;
-    cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    color: $text-secondary;
-    user-select: none;
-
-    &:hover {
-      background: rgba(100, 108, 255, 0.15);
-      color: $primary-color;
-      padding-left: 20px;
-    }
-
-    &:active {
-      transform: scale(0.98);
-    }
-
-    &.active {
-      background: $primary-gradient;
-      color: #fff;
-      box-shadow: 0 0 20px rgba(100, 108, 255, 0.4);
-      padding-left: 20px;
-
-      .menu-indicator {
-        opacity: 1;
-        transform: scaleY(1);
-      }
-    }
-
-    &.disabled {
-      opacity: 0.4;
-      cursor: not-allowed;
-      pointer-events: all;
-    }
-
-    .menu-indicator {
-      position: absolute;
-      left: 0;
-      top: 50%;
-      transform: translateY(-50%) scaleY(0);
-      width: 3px;
-      height: 24px;
-      background: #fff;
-      border-radius: 0 2px 2px 0;
-      opacity: 0;
-      transition: all 0.2s ease;
-    }
-
-    .menu-icon {
-      font-size: 22px;
-      transition: all 0.2s ease;
-    }
-
-    .menu-title {
-      font-size: 14px;
-      font-weight: 500;
-      transition: all 0.2s ease;
-    }
+  &.disabled {
+    opacity: 0.45;
   }
 }
 
-// 主内容区域
 .main-container {
-  flex: 1;
-  margin-left: 220px;
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
+  min-width: 0;
 }
 
 .app-header {
+  height: 72px;
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  height: 64px;
+  align-items: center;
   padding: 0 $page-padding;
-  background: rgba(22, 24, 38, 0.7);
+  border-bottom: 1px solid rgba(100, 108, 255, 0.12);
+  background: rgba(10, 10, 18, 0.72);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid rgba(100, 108, 255, 0.2);
-  position: sticky;
-  top: 0;
-  z-index: 999;
+}
 
-  .page-title {
-    font-size: 22px;
-    font-weight: 700;
-    margin: 0;
-  }
+.page-title {
+  margin: 0;
+  font-size: 24px;
+}
 
-  .user-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    color: $text-primary;
-    font-size: 15px;
-    font-weight: 500;
-
-    .user-avatar {
-      background: $primary-gradient;
-      color: #fff;
-      font-weight: 600;
-      box-shadow: 0 0 12px rgba(100, 108, 255, 0.3);
-    }
-  }
+.page-subtitle {
+  margin: 6px 0 0;
+  color: $text-secondary;
+  font-size: 13px;
 }
 
 .app-main {
   padding: $page-padding;
-  padding-bottom: 4px; /* 大幅减小底部padding，让分页离底边更近 */
-  background-color: $bg-page;
-  overflow-y: auto;
-  flex: 1;
-  box-sizing: border-box;
-  height: calc(100vh - 64px);
-  /* 隐藏滚动条但保留滚动功能 */
-  scrollbar-width: thin;
-  scrollbar-color: rgba(100, 108, 255, 0.5) transparent;
-}
-.app-main::-webkit-scrollbar {
-  width: 6px;
-}
-.app-main::-webkit-scrollbar-track {
-  background: transparent;
-}
-.app-main::-webkit-scrollbar-thumb {
-  background: rgba(100, 108, 255, 0.5);
-  border-radius: 3px;
-}
-.app-main::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 108, 255, 0.7);
 }
 
-// 脉冲动画
-@keyframes pulse {
-  0%, 100% {
-    opacity: 1;
+.user-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  color: $text-primary;
+
+  strong,
+  span {
+    display: block;
   }
-  50% {
-    opacity: 0.7;
+
+  span {
+    margin-top: 4px;
+    font-size: 12px;
+    color: $text-secondary;
+  }
+}
+
+.avatar-field {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 92px !important;
+  }
+
+  .sidebar-logo span,
+  .menu-item span {
+    display: none;
   }
 }
 </style>

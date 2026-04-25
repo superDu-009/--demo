@@ -2,32 +2,35 @@ package com.lanyan.aidrama.module.content.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
-import com.lanyan.aidrama.common.PageResult;
-import com.lanyan.aidrama.common.ContentStatus;
-import com.lanyan.aidrama.common.ShotStatus;
 import com.lanyan.aidrama.entity.*;
 import com.lanyan.aidrama.mapper.*;
+import com.lanyan.aidrama.module.aitask.client.DoubaoClient;
+import com.lanyan.aidrama.module.aitask.client.ImageGenClient;
+import com.lanyan.aidrama.module.aitask.client.VideoGenClient;
 import com.lanyan.aidrama.module.content.dto.*;
-import com.lanyan.aidrama.module.project.dto.ShotAiTaskVO;
-import com.lanyan.aidrama.module.project.dto.ShotAssetRefVO;
-import com.lanyan.aidrama.module.project.dto.ShotVO;
+import com.lanyan.aidrama.module.task.dto.BatchTaskStatusRequest;
+import com.lanyan.aidrama.module.task.dto.TaskVO;
+import com.lanyan.aidrama.module.task.service.TaskService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileCopyUtils;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.time.LocalDateTime;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 内容服务实现类 (系分 4.4.2)
- * 实现分集/分场/分镜 CRUD、批量审核、资产绑定
+ * 内容服务实现类 (系分 v1.2 第 7.3 节)
  */
 @Slf4j
 @Service
@@ -35,13 +38,19 @@ import java.util.stream.Collectors;
 public class ContentServiceImpl implements ContentService {
 
     private final EpisodeMapper episodeMapper;
-    private final SceneMapper sceneMapper;
     private final ShotMapper shotMapper;
     private final ShotAssetRefMapper shotAssetRefMapper;
     private final AssetMapper assetMapper;
-    private final AiTaskMapper aiTaskMapper;
+    private final ProjectMapper projectMapper;
+    private final PromptConfigMapper promptConfigMapper;
+    private final TaskMapper taskMapper;
+    private final DoubaoClient doubaoClient;
+    private final ImageGenClient imageGenClient;
+    private final VideoGenClient videoGenClient;
+    private final TaskService taskService;
+    private final ObjectMapper objectMapper;
 
-    // ===== 分集相关 =====
+    // ==================== 分集相关 ====================
 
     @Override
     public List<EpisodeVO> listEpisodes(Long projectId) {
@@ -51,28 +60,138 @@ public class ContentServiceImpl implements ContentService {
 
         return episodeMapper.selectList(wrapper).stream()
                 .map(this::toEpisodeVO)
-                .collect(Collectors.toList());
+                .toList();
+    }
+
+    @Override
+    public Long analyzeScript(Long projectId) {
+        Project project = getProjectById(projectId);
+        if (project.getNovelTosPath() == null || project.getNovelTosPath().isBlank()) {
+            throw new BusinessException(40900, "请先上传小说文件");
+        }
+
+        // 创建 task 记录
+        Task task = new Task();
+        task.setType("script_analyze");
+        task.setProjectId(projectId);
+        task.setStatus(0);
+        task.setPollCount(0);
+        taskMapper.insert(task);
+
+        // 异步执行
+        executeScriptAnalyzeAsync(task.getId(), projectId);
+
+        return task.getId();
+    }
+
+    @Override
+    public ScriptAnalyzeStatusVO getAnalyzeStatus(Long projectId) {
+        // 查找该项目最新的剧本分析任务
+        LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Task::getProjectId, projectId)
+               .eq(Task::getType, "script_analyze")
+               .orderByDesc(Task::getId)
+               .last("LIMIT 1");
+        Task task = taskMapper.selectOne(wrapper);
+
+        ScriptAnalyzeStatusVO vo = new ScriptAnalyzeStatusVO();
+        if (task == null) {
+            vo.setParseStatus("pending");
+            return vo;
+        }
+
+        vo.setTaskId(task.getId());
+        // 根据 task 状态映射到解析状态
+        vo.setParseStatus(switch (task.getStatus()) {
+            case 0 -> "analyzing";
+            case 1 -> "analyzing";
+            case 2 -> "success";
+            case 3 -> "failed";
+            default -> "pending";
+        });
+        vo.setParseError(task.getErrorMsg());
+        return vo;
+    }
+
+    @Async("aiTaskExecutor")
+    public void executeScriptAnalyzeAsync(Long taskId, Long projectId) {
+        Task task = taskMapper.selectById(taskId);
+        if (task == null) return;
+
+        try {
+            // 更新为处理中
+            task.setStatus(1);
+            taskMapper.updateById(task);
+
+            // 获取 prompt
+            String promptText = getPromptText("script_split");
+
+            // 读取项目小说纯文本内容（从 TOS 下载，这里简化处理）
+            // 实际项目中应该通过 TosService 读取 novelTosPath 内容
+
+            // 调用 AI
+            String aiResult = doubaoClient.chat(promptText, "请拆分小说内容");
+
+            // TODO: 解析 AI 返回的 JSON，写入 episode 表
+            // 目前更新项目 parse_status 为 success
+            LambdaQueryWrapper<Episode> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(Episode::getProjectId, projectId);
+            List<Episode> episodes = episodeMapper.selectList(wrapper);
+
+            if (episodes.isEmpty()) {
+                // 没有分集则创建
+                Episode episode = new Episode();
+                episode.setProjectId(projectId);
+                episode.setTitle("第1集");
+                episode.setContent(aiResult);
+                episode.setSortOrder(0);
+                episode.setParseStatus("success");
+                episodeMapper.insert(episode);
+            }
+
+            // 更新 task 状态为成功
+            task.setStatus(2);
+            task.setResultData(aiResult);
+            taskMapper.updateById(task);
+
+            // 更新分集 parse_status
+            LambdaQueryWrapper<Episode> updateWrapper = new LambdaQueryWrapper<>();
+            updateWrapper.eq(Episode::getProjectId, projectId);
+            List<Episode> toUpdate = episodeMapper.selectList(updateWrapper);
+            for (Episode ep : toUpdate) {
+                ep.setParseStatus("success");
+                episodeMapper.updateById(ep);
+            }
+
+        } catch (Exception e) {
+            log.error("剧本分析失败, projectId: {}", projectId, e);
+            task.setStatus(3);
+            task.setErrorMsg(e.getMessage());
+            taskMapper.updateById(task);
+        }
     }
 
     @Override
     public Long createEpisode(Long projectId, EpisodeCreateRequest req) {
-        // 获取当前最大 sort_order，自动递增
+        getProjectById(projectId);
+
+        // 自动递增 sort_order
         LambdaQueryWrapper<Episode> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Episode::getProjectId, projectId)
                .orderByDesc(Episode::getSortOrder)
                .last("LIMIT 1");
-        Episode maxOrderEpisode = episodeMapper.selectOne(wrapper);
-        int sortOrder = (maxOrderEpisode != null) ? maxOrderEpisode.getSortOrder() + 1 : 0;
+        Episode maxEpisode = episodeMapper.selectOne(wrapper);
+        int sortOrder = (maxEpisode != null) ? maxEpisode.getSortOrder() + 1 : 0;
 
         Episode episode = new Episode();
         episode.setProjectId(projectId);
         episode.setTitle(req.getTitle());
         episode.setContent(req.getContent());
         episode.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        episode.setStatus(ContentStatus.PENDING);
+        episode.setParseStatus("success");
 
         episodeMapper.insert(episode);
-        log.info("创建分集成功, episodeId: {}, projectId: {}", episode.getId(), projectId);
+        log.info("创建分集成功, episodeId: {}", episode.getId());
         return episode.getId();
     }
 
@@ -83,18 +202,9 @@ public class ContentServiceImpl implements ContentService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        if (req.getTitle() != null) {
-            episode.setTitle(req.getTitle());
-        }
-        if (req.getContent() != null) {
-            episode.setContent(req.getContent());
-        }
-        if (req.getSortOrder() != null) {
-            episode.setSortOrder(req.getSortOrder());
-        }
-        if (req.getStatus() != null) {
-            episode.setStatus(req.getStatus());
-        }
+        if (req.getTitle() != null) episode.setTitle(req.getTitle());
+        if (req.getContent() != null) episode.setContent(req.getContent());
+        if (req.getSortOrder() != null) episode.setSortOrder(req.getSortOrder());
 
         episodeMapper.updateById(episode);
         log.info("更新分集成功, episodeId: {}", id);
@@ -108,219 +218,143 @@ public class ContentServiceImpl implements ContentService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        // 级联逻辑删除：分场 → 分镜 → 资产关联
-        // 1. 查询该分集下所有分场
-        LambdaQueryWrapper<Scene> sceneWrapper = new LambdaQueryWrapper<>();
-        sceneWrapper.eq(Scene::getEpisodeId, id).select(Scene::getId);
-        List<Long> sceneIds = sceneMapper.selectList(sceneWrapper).stream()
-                .map(Scene::getId).collect(Collectors.toList());
-
-        if (!sceneIds.isEmpty()) {
-            // 2. 查询分镜并删除关联资产
-            LambdaQueryWrapper<Shot> shotWrapper = new LambdaQueryWrapper<>();
-            shotWrapper.in(Shot::getSceneId, sceneIds).select(Shot::getId);
-            List<Long> shotIds = shotMapper.selectList(shotWrapper).stream()
-                    .map(Shot::getId).collect(Collectors.toList());
-
-            if (!shotIds.isEmpty()) {
-                // 3. 删除分镜-资产关联
-                LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
-                refWrapper.in(ShotAssetRef::getShotId, shotIds);
-                shotAssetRefMapper.delete(refWrapper);
-
-                // 4. 删除分镜
-                shotMapper.delete(new LambdaQueryWrapper<Shot>().in(Shot::getId, shotIds));
-            }
-
-            // 5. 删除分场
-            sceneMapper.delete(new LambdaQueryWrapper<Scene>().in(Scene::getId, sceneIds));
-        }
-
-        // 6. 删除分集
-        episodeMapper.deleteById(id);
-        log.info("级联删除分集成功, episodeId: {}", id);
-    }
-
-    // ===== 分场相关 =====
-
-    @Override
-    public List<SceneVO> listScenes(Long episodeId) {
-        LambdaQueryWrapper<Scene> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Scene::getEpisodeId, episodeId)
-               .orderByAsc(Scene::getSortOrder);
-
-        return sceneMapper.selectList(wrapper).stream()
-                .map(this::toSceneVO)
-                .collect(Collectors.toList());
-    }
-
-    @Override
-    public Long createScene(Long episodeId, SceneCreateRequest req) {
-        // 获取当前最大 sort_order
-        LambdaQueryWrapper<Scene> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Scene::getEpisodeId, episodeId)
-               .orderByDesc(Scene::getSortOrder)
-               .last("LIMIT 1");
-        Scene maxOrderScene = sceneMapper.selectOne(wrapper);
-        int sortOrder = (maxOrderScene != null) ? maxOrderScene.getSortOrder() + 1 : 0;
-
-        Scene scene = new Scene();
-        scene.setEpisodeId(episodeId);
-        scene.setTitle(req.getTitle());
-        scene.setContent(req.getContent());
-        scene.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        scene.setStatus(ContentStatus.PENDING);
-
-        sceneMapper.insert(scene);
-        log.info("创建分场成功, sceneId: {}, episodeId: {}", scene.getId(), episodeId);
-        return scene.getId();
-    }
-
-    @Override
-    public void updateScene(Long id, SceneUpdateRequest req) {
-        Scene scene = sceneMapper.selectById(id);
-        if (scene == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
-
-        if (req.getTitle() != null) {
-            scene.setTitle(req.getTitle());
-        }
-        if (req.getContent() != null) {
-            scene.setContent(req.getContent());
-        }
-        if (req.getSortOrder() != null) {
-            scene.setSortOrder(req.getSortOrder());
-        }
-        if (req.getStatus() != null) {
-            scene.setStatus(req.getStatus());
-        }
-
-        sceneMapper.updateById(scene);
-        log.info("更新分场成功, sceneId: {}", id);
-    }
-
-    @Override
-    @Transactional
-    public void deleteScene(Long id) {
-        Scene scene = sceneMapper.selectById(id);
-        if (scene == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
-
-        // 级联删除：分镜 → 资产关联
+        // 级联删除分镜
         LambdaQueryWrapper<Shot> shotWrapper = new LambdaQueryWrapper<>();
-        shotWrapper.eq(Shot::getSceneId, id).select(Shot::getId);
+        shotWrapper.eq(Shot::getEpisodeId, id).select(Shot::getId);
         List<Long> shotIds = shotMapper.selectList(shotWrapper).stream()
-                .map(Shot::getId).collect(Collectors.toList());
+                .map(Shot::getId).toList();
 
         if (!shotIds.isEmpty()) {
             LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
             refWrapper.in(ShotAssetRef::getShotId, shotIds);
             shotAssetRefMapper.delete(refWrapper);
-
             shotMapper.delete(new LambdaQueryWrapper<Shot>().in(Shot::getId, shotIds));
         }
 
-        sceneMapper.deleteById(id);
-        log.info("级联删除分场成功, sceneId: {}", id);
+        episodeMapper.deleteById(id);
+        log.info("删除分集成功, episodeId: {}", id);
     }
 
-    // ===== 分镜相关 =====
+    // ==================== 分镜相关 ====================
 
     @Override
-    public PageResult<ShotVO> listShots(Long sceneId, int page, int size, Integer status) {
-        Page<Shot> pageParam = new Page<>(page, size);
+    public List<ShotVO> listShots(Long episodeId, String promptStatus, String imageStatus, String videoStatus) {
         LambdaQueryWrapper<Shot> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Shot::getSceneId, sceneId)
-               .eq(status != null, Shot::getStatus, status)
-               .eq(Shot::getDeleted, 0)
+        wrapper.eq(Shot::getEpisodeId, episodeId)
+               .eq(promptStatus != null, Shot::getPromptStatus, promptStatus)
+               .eq(imageStatus != null, Shot::getImageStatus, imageStatus)
+               .eq(videoStatus != null, Shot::getVideoStatus, videoStatus)
                .orderByAsc(Shot::getSortOrder);
 
-        IPage<Shot> pageResult = shotMapper.selectPage(pageParam, wrapper);
-
-        List<Shot> shots = pageResult.getRecords();
-        if (shots.isEmpty()) {
-            PageResult<ShotVO> result = new PageResult<>();
-            result.setList(List.of());
-            result.setTotal(pageResult.getTotal());
-            result.setPage((int) pageResult.getCurrent());
-            result.setSize((int) pageResult.getSize());
-            result.setHasNext(false);
-            return result;
-        }
-
-        List<Long> shotIds = shots.stream()
-                .map(Shot::getId)
-                .toList();
+        List<Shot> shots = shotMapper.selectList(wrapper);
+        if (shots.isEmpty()) return List.of();
 
         // 批量查询资产关联
+        List<Long> shotIds = shots.stream().map(Shot::getId).toList();
         LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
         refWrapper.in(ShotAssetRef::getShotId, shotIds);
-        List<ShotAssetRef> allRefs = shotAssetRefMapper.selectList(refWrapper);
+        List<ShotAssetRef> refs = shotAssetRefMapper.selectList(refWrapper);
 
-        // 批量查询资产信息
-        Map<Long, Asset> assetMap = Map.of();
-        if (!allRefs.isEmpty()) {
-            List<Long> assetIds = allRefs.stream()
-                    .map(ShotAssetRef::getAssetId)
-                    .distinct()
-                    .toList();
-            assetMap = assetMapper.selectBatchIds(assetIds).stream()
-                    .collect(Collectors.toMap(Asset::getId, a -> a));
-        }
+        Map<Long, Asset> assetMap = !refs.isEmpty()
+                ? assetMapper.selectBatchIds(refs.stream().map(ShotAssetRef::getAssetId).distinct().toList()).stream()
+                    .collect(Collectors.toMap(Asset::getId, a -> a))
+                : new java.util.HashMap<>();
 
-        // 批量查询最新 AI 任务
-        Map<Long, AiTask> taskMap = Map.of();
-        if (!shotIds.isEmpty()) {
-            LambdaQueryWrapper<AiTask> taskWrapper = new LambdaQueryWrapper<>();
-            taskWrapper.in(AiTask::getShotId, shotIds)
-                       .orderByDesc(AiTask::getId);
-            List<AiTask> allTasks = aiTaskMapper.selectList(taskWrapper);
-            taskMap = allTasks.stream()
-                    .collect(Collectors.toMap(AiTask::getShotId, t -> t, (existing, replacement) -> existing));
-        }
-
-        final Map<Long, Asset> finalAssetMap = assetMap;
-        final Map<Long, AiTask> finalTaskMap = taskMap;
-
-        // 按 shotId 分组资产关联
-        Map<Long, List<ShotAssetRef>> refsByShot = allRefs.stream()
+        java.util.Map<Long, List<ShotAssetRef>> refsByShot = refs.stream()
                 .collect(Collectors.groupingBy(ShotAssetRef::getShotId));
 
-        List<ShotVO> voList = shots.stream()
-                .map(shot -> toShotVO(shot, refsByShot, finalAssetMap, finalTaskMap))
+        return shots.stream()
+                .map(shot -> toShotVO(shot, refsByShot, assetMap))
                 .toList();
-
-        PageResult<ShotVO> result = new PageResult<>();
-        result.setList(voList);
-        result.setTotal(pageResult.getTotal());
-        result.setPage((int) pageResult.getCurrent());
-        result.setSize((int) pageResult.getSize());
-        result.setHasNext(pageResult.getCurrent() * pageResult.getSize() < pageResult.getTotal());
-        return result;
     }
 
     @Override
-    public Long createShot(Long sceneId, ShotCreateRequest req) {
-        // 获取当前最大 sort_order
+    public Long splitShots(Long episodeId, Integer duration) {
+        Episode episode = episodeMapper.selectById(episodeId);
+        if (episode == null || episode.getContent() == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
+        Task task = new Task();
+        task.setType("shot_split");
+        task.setProjectId(episode.getProjectId());
+        task.setEpisodeId(episodeId);
+        task.setStatus(0);
+        task.setPollCount(0);
+        taskMapper.insert(task);
+
+        executeShotSplitAsync(task.getId(), episodeId, duration != null ? duration : 10);
+        return task.getId();
+    }
+
+    @Async("aiTaskExecutor")
+    public void executeShotSplitAsync(Long taskId, Long episodeId, Integer duration) {
+        Task task = taskMapper.selectById(taskId);
+        if (task == null) return;
+
+        try {
+            task.setStatus(1);
+            taskMapper.updateById(task);
+
+            // 获取 prompt 并替换时长变量
+            String promptText = getPromptText("shot_split")
+                    .replace("{duration}", String.valueOf(duration));
+
+            Episode episode = episodeMapper.selectById(episodeId);
+
+            // 调用 AI 拆分
+            String aiResult = doubaoClient.chat(promptText, episode.getContent());
+
+            // 解析 AI 返回的 JSON，写入 shot 表
+            parseAndCreateShots(episodeId, aiResult);
+
+            task.setStatus(2);
+            task.setResultData(aiResult);
+            taskMapper.updateById(task);
+
+        } catch (Exception e) {
+            log.error("分镜拆分失败, episodeId: {}", episodeId, e);
+            task.setStatus(3);
+            task.setErrorMsg(e.getMessage());
+            taskMapper.updateById(task);
+        }
+    }
+
+    @Override
+    public Long createShot(Long episodeId, ShotCreateRequest req) {
+        Episode episode = episodeMapper.selectById(episodeId);
+        if (episode == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+
         LambdaQueryWrapper<Shot> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Shot::getSceneId, sceneId)
+        wrapper.eq(Shot::getEpisodeId, episodeId)
                .orderByDesc(Shot::getSortOrder)
                .last("LIMIT 1");
-        Shot maxOrderShot = shotMapper.selectOne(wrapper);
-        int sortOrder = (maxOrderShot != null) ? maxOrderShot.getSortOrder() + 1 : 0;
+        Shot maxShot = shotMapper.selectOne(wrapper);
+        int sortOrder = (maxShot != null) ? maxShot.getSortOrder() + 1 : 0;
 
         Shot shot = new Shot();
-        shot.setSceneId(sceneId);
+        shot.setEpisodeId(episodeId);
         shot.setPrompt(req.getPrompt());
+        shot.setDuration(req.getDuration());
+        shot.setSceneType(req.getSceneType());
+        shot.setCameraMove(req.getCameraMove());
+        shot.setLines(req.getLines() != null ? toJsonString(req.getLines()) : null);
         shot.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        shot.setStatus(ShotStatus.PENDING);
-        shot.setVersion(1);
-        shot.setGenerationAttempts(0);
+        shot.setFollowLast(req.getFollowLast() != null ? req.getFollowLast() : 1);
+        shot.setPromptStatus("pending");
+        shot.setImageStatus("pending");
+        shot.setVideoStatus("pending");
 
         shotMapper.insert(shot);
-        log.info("创建分镜成功, shotId: {}, sceneId: {}", shot.getId(), sceneId);
+
+        // 绑定资产
+        if (req.getAssetIds() != null && !req.getAssetIds().isEmpty()) {
+            bindAssetsToShot(shot.getId(), req.getAssetIds());
+        }
+
+        log.info("创建分镜成功, shotId: {}", shot.getId());
         return shot.getId();
     }
 
@@ -331,23 +365,27 @@ public class ContentServiceImpl implements ContentService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        if (req.getPrompt() != null) {
-            shot.setPrompt(req.getPrompt());
-        }
-        if (req.getPromptEn() != null) {
-            shot.setPromptEn(req.getPromptEn());
-        }
-        if (req.getSortOrder() != null) {
-            shot.setSortOrder(req.getSortOrder());
-        }
-        if (req.getGeneratedImageUrl() != null) {
-            shot.setGeneratedImageUrl(req.getGeneratedImageUrl());
-        }
-        if (req.getGeneratedVideoUrl() != null) {
-            shot.setGeneratedVideoUrl(req.getGeneratedVideoUrl());
-        }
+        if (req.getPrompt() != null) shot.setPrompt(req.getPrompt());
+        if (req.getPromptEn() != null) shot.setPromptEn(req.getPromptEn());
+        if (req.getSortOrder() != null) shot.setSortOrder(req.getSortOrder());
+        if (req.getDuration() != null) shot.setDuration(req.getDuration());
+        if (req.getSceneType() != null) shot.setSceneType(req.getSceneType());
+        if (req.getCameraMove() != null) shot.setCameraMove(req.getCameraMove());
+        if (req.getLines() != null) shot.setLines(toJsonString(req.getLines()));
+        if (req.getFollowLast() != null) shot.setFollowLast(req.getFollowLast());
 
         shotMapper.updateById(shot);
+
+        // 更新资产绑定
+        if (req.getAssetIds() != null) {
+            // 先解绑旧的
+            LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
+            refWrapper.eq(ShotAssetRef::getShotId, id);
+            shotAssetRefMapper.delete(refWrapper);
+            // 再绑定新的
+            bindAssetsToShot(id, req.getAssetIds());
+        }
+
         log.info("更新分镜成功, shotId: {}", id);
     }
 
@@ -358,7 +396,6 @@ public class ContentServiceImpl implements ContentService {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        // 删除资产关联
         LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
         refWrapper.eq(ShotAssetRef::getShotId, id);
         shotAssetRefMapper.delete(refWrapper);
@@ -368,137 +405,514 @@ public class ContentServiceImpl implements ContentService {
     }
 
     @Override
-    @Transactional
-    public BatchReviewResult batchReviewShots(List<Long> shotIds, String action, String comment) {
-        BatchReviewResult result = new BatchReviewResult();
-        result.setTotalCount(shotIds.size());
-        result.setSuccessCount(0);
-        result.setFailedCount(0);
-        result.setFailedDetails(new ArrayList<>());
-
-        for (Long shotId : shotIds) {
-            Shot shot = shotMapper.selectById(shotId);
-            if (shot == null) {
-                addFailure(result, shotId, "分镜不存在");
-                continue;
-            }
-
-            if (shot.getStatus() != ShotStatus.GENERATING && shot.getStatus() != ShotStatus.REVIEWING) {
-                addFailure(result, shotId, "分镜状态不支持当前操作");
-                continue;
-            }
-
-            if ("approve".equals(action)) {
-                shot.setStatus(ShotStatus.COMPLETED);
-                shotMapper.updateById(shot);
-                result.setSuccessCount(result.getSuccessCount() + 1);
-            } else if ("reject".equals(action)) {
-                // 打回
-                if (comment == null || comment.isBlank()) {
-                    addFailure(result, shotId, "打回时必须填写审核意见");
-                    continue;
-                }
-                shot.setStatus(ShotStatus.REJECTED);
-                shot.setReviewComment(comment);
-                shotMapper.updateById(shot);
-                result.setSuccessCount(result.getSuccessCount() + 1);
-            } else {
-                addFailure(result, shotId, "不支持的操作类型");
-            }
+    public void sortShot(Long id, Integer sortOrder) {
+        Shot shot = shotMapper.selectById(id);
+        if (shot == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
-
-        result.setFailedCount(result.getTotalCount() - result.getSuccessCount());
-        log.info("批量审核完成, 总数: {}, 成功: {}, 失败: {}", result.getTotalCount(), result.getSuccessCount(), result.getFailedCount());
-        return result;
+        shot.setSortOrder(sortOrder);
+        shotMapper.updateById(shot);
+        log.info("分镜排序成功, shotId: {}, sortOrder: {}", id, sortOrder);
     }
 
     @Override
-    @Transactional
-    public void bindAssetToShot(Long shotId, Long assetId, String assetType) {
-        Shot shot = shotMapper.selectById(shotId);
+    public void saveDraft(Long id, String draftContent) {
+        Shot shot = shotMapper.selectById(id);
+        if (shot == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        shot.setDraftContent(draftContent);
+        shotMapper.updateById(shot);
+        log.info("保存分镜草稿成功, shotId: {}", id);
+    }
+
+    @Override
+    public Long generatePrompt(Long id) {
+        Shot shot = shotMapper.selectById(id);
         if (shot == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
 
-        Asset asset = assetMapper.selectById(assetId);
-        if (asset == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Task task = new Task();
+        task.setType("prompt_gen");
+        task.setShotId(id);
+        // 通过 episode 找 projectId
+        Episode episode = episodeMapper.selectById(shot.getEpisodeId());
+        if (episode != null) task.setProjectId(episode.getProjectId());
+        task.setStatus(0);
+        task.setPollCount(0);
+        taskMapper.insert(task);
 
-        // 防止重复绑定（利用唯一约束）
-        LambdaQueryWrapper<ShotAssetRef> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ShotAssetRef::getShotId, shotId)
-               .eq(ShotAssetRef::getAssetId, assetId);
-        Long count = shotAssetRefMapper.selectCount(wrapper);
-        if (count > 0) {
-            throw new BusinessException(ErrorCode.SHOT_STATUS_NOT_SUPPORT);
-        }
+        executePromptGenAsync(task.getId(), id);
+        return task.getId();
+    }
 
-        ShotAssetRef ref = new ShotAssetRef();
-        ref.setShotId(shotId);
-        ref.setAssetId(assetId);
-        ref.setAssetType(assetType);
-        shotAssetRefMapper.insert(ref);
-        log.info("绑定资产到分镜成功, shotId: {}, assetId: {}", shotId, assetId);
+    @Async("aiTaskExecutor")
+    public void executePromptGenAsync(Long taskId, Long shotId) {
+        Task task = taskMapper.selectById(taskId);
+        if (task == null) return;
+
+        try {
+            task.setStatus(1);
+            taskMapper.updateById(task);
+
+            Shot shot = shotMapper.selectById(shotId);
+            String promptText = getPromptText("prompt_gen");
+
+            // 调用 AI 生成英文提示词
+            String promptEn = doubaoClient.chat(promptText, shot.getPrompt());
+
+            // 翻译 prompt
+            shot.setPromptEn(promptEn);
+            shot.setPromptStatus("success");
+            shotMapper.updateById(shot);
+
+            task.setStatus(2);
+            task.setResultData(promptEn);
+            taskMapper.updateById(task);
+
+        } catch (Exception e) {
+            log.error("提示词生成失败, shotId: {}", shotId, e);
+            task.setStatus(3);
+            task.setErrorMsg(e.getMessage());
+            taskMapper.updateById(task);
+
+            Shot shot = shotMapper.selectById(shotId);
+            if (shot != null) {
+                shot.setPromptStatus("failed");
+                shot.setErrorMsg(e.getMessage());
+                shotMapper.updateById(shot);
+            }
+        }
     }
 
     @Override
-    @Transactional
-    public void unbindAssetFromShot(Long shotId, Long assetId) {
-        LambdaQueryWrapper<ShotAssetRef> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(ShotAssetRef::getShotId, shotId)
-               .eq(ShotAssetRef::getAssetId, assetId);
-        shotAssetRefMapper.delete(wrapper);
-        log.info("解绑分镜资产成功, shotId: {}, assetId: {}", shotId, assetId);
+    public Long generateImage(Long id) {
+        Shot shot = shotMapper.selectById(id);
+        if (shot == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        if (shot.getPromptEn() == null || shot.getPromptEn().isBlank()) {
+            throw new BusinessException(40900, "请先生成英文提示词");
+        }
+
+        Task task = new Task();
+        task.setType("image_gen");
+        task.setShotId(id);
+        Episode episode = episodeMapper.selectById(shot.getEpisodeId());
+        if (episode != null) task.setProjectId(episode.getProjectId());
+        task.setStatus(0);
+        task.setPollCount(0);
+        taskMapper.insert(task);
+
+        // 同步提交，落库后再返回
+        Long taskId = task.getId();
+
+        executeImageGenAsync(taskId, id);
+
+        return taskId;
     }
 
-    // ===== 内部方法 =====
+    @Async("aiTaskExecutor")
+    public void executeImageGenAsync(Long taskId, Long shotId) {
+        Task task = taskMapper.selectById(taskId);
+        if (task == null) return;
 
+        try {
+            task.setStatus(1);
+            taskMapper.updateById(task);
+
+            Shot shot = shotMapper.selectById(shotId);
+            List<String> refImages = getAssetReferenceImages(shotId);
+
+            // 调用图片生成 API
+            List<String> imageUrls = imageGenClient.generateImage(shot.getPromptEn(), refImages);
+
+            if (imageUrls.isEmpty()) {
+                task.setStatus(3);
+                task.setErrorMsg("AI 生成图片为空");
+                shot.setImageStatus("failed");
+                shot.setErrorMsg("AI 生成图片为空");
+            } else {
+                // TODO: 下载图片上传到 TOS，回写 URL
+                // 简化处理：先直接用返回的 URL
+                String imageUrl = imageUrls.get(0);
+                shot.setGeneratedImageUrl(imageUrl);
+                shot.setImageStatus("success");
+                task.setStatus(2);
+                task.setResultUrl(imageUrl);
+            }
+
+            shotMapper.updateById(shot);
+            taskMapper.updateById(task);
+
+        } catch (Exception e) {
+            log.error("图片生成失败, shotId: {}", shotId, e);
+            task.setStatus(3);
+            task.setErrorMsg("图片生成失败: " + e.getMessage());
+            taskMapper.updateById(task);
+
+            Shot shot = shotMapper.selectById(shotId);
+            if (shot != null) {
+                shot.setImageStatus("failed");
+                shot.setErrorMsg("图片生成失败: " + e.getMessage());
+                shotMapper.updateById(shot);
+            }
+        }
+    }
+
+    @Override
+    public Long generateVideo(Long id) {
+        Shot shot = shotMapper.selectById(id);
+        if (shot == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        if (shot.getPromptEn() == null || shot.getPromptEn().isBlank()) {
+            throw new BusinessException(40900, "请先生成英文提示词");
+        }
+
+        Task task = new Task();
+        task.setType("video_gen");
+        task.setShotId(id);
+        Episode episode = episodeMapper.selectById(shot.getEpisodeId());
+        if (episode != null) task.setProjectId(episode.getProjectId());
+        task.setStatus(0);
+        task.setPollCount(0);
+        taskMapper.insert(task);
+
+        Long taskId = task.getId();
+
+        executeVideoGenAsync(taskId, id);
+
+        return taskId;
+    }
+
+    @Async("aiTaskExecutor")
+    public void executeVideoGenAsync(Long taskId, Long shotId) {
+        Task task = taskMapper.selectById(taskId);
+        if (task == null) return;
+
+        try {
+            task.setStatus(1);
+            taskMapper.updateById(task);
+
+            Shot shot = shotMapper.selectById(shotId);
+            List<String> refImages = getAssetReferenceImages(shotId);
+
+            // 视频承接逻辑：如果 follow_last=1，取上一分镜尾帧
+            String firstFrame = null;
+            if (shot.getFollowLast() == 1) {
+                LambdaQueryWrapper<Shot> prevWrapper = new LambdaQueryWrapper<>();
+                prevWrapper.eq(Shot::getEpisodeId, shot.getEpisodeId())
+                           .lt(Shot::getSortOrder, shot.getSortOrder())
+                           .orderByDesc(Shot::getSortOrder)
+                           .last("LIMIT 1");
+                Shot prevShot = shotMapper.selectOne(prevWrapper);
+                if (prevShot != null && prevShot.getLastFrameUrl() != null) {
+                    firstFrame = prevShot.getLastFrameUrl();
+                }
+            }
+
+            // 提交视频生成任务
+            String providerTaskId = videoGenClient.submitVideoTask(shot.getPromptEn(), firstFrame, refImages);
+            task.setProviderTaskId(providerTaskId);
+            taskMapper.updateById(task);
+
+            // TODO: 视频生成成功后需要轮询，在 TaskScheduler 中处理
+
+        } catch (Exception e) {
+            log.error("视频生成提交失败, shotId: {}", shotId, e);
+            task.setStatus(3);
+            task.setErrorMsg("视频生成失败: " + e.getMessage());
+            taskMapper.updateById(task);
+
+            Shot shot = shotMapper.selectById(shotId);
+            if (shot != null) {
+                shot.setVideoStatus("failed");
+                shot.setErrorMsg("视频生成失败: " + e.getMessage());
+                shotMapper.updateById(shot);
+            }
+        }
+    }
+
+    // ==================== 批量操作 ====================
+
+    @Override
+    public BatchResultVO batchPrompt(Long episodeId) {
+        List<Shot> shots = getShotsByEpisodeId(episodeId);
+        String batchId = UUID.randomUUID().toString();
+        List<Long> taskIds = new ArrayList<>();
+
+        for (Shot shot : shots) {
+            if (shot.getPrompt() == null) continue;
+            Task task = new Task();
+            task.setType("prompt_gen");
+            task.setShotId(shot.getId());
+            task.setEpisodeId(episodeId);
+            Episode ep = episodeMapper.selectById(episodeId);
+            if (ep != null) task.setProjectId(ep.getProjectId());
+            task.setBatchId(batchId);
+            task.setStatus(0);
+            task.setPollCount(0);
+            taskMapper.insert(task);
+            taskIds.add(task.getId());
+            executePromptGenAsync(task.getId(), shot.getId());
+        }
+
+        BatchResultVO vo = new BatchResultVO();
+        vo.setBatchId(batchId);
+        vo.setTaskIds(taskIds);
+        return vo;
+    }
+
+    @Override
+    public BatchResultVO batchImage(Long episodeId) {
+        List<Shot> shots = getShotsByEpisodeId(episodeId);
+        String batchId = UUID.randomUUID().toString();
+        List<Long> taskIds = new ArrayList<>();
+
+        for (Shot shot : shots) {
+            if (shot.getPromptEn() == null || shot.getPromptEn().isBlank()) continue;
+            Task task = new Task();
+            task.setType("image_gen");
+            task.setShotId(shot.getId());
+            task.setEpisodeId(episodeId);
+            Episode ep = episodeMapper.selectById(episodeId);
+            if (ep != null) task.setProjectId(ep.getProjectId());
+            task.setBatchId(batchId);
+            task.setStatus(0);
+            task.setPollCount(0);
+            taskMapper.insert(task);
+            taskIds.add(task.getId());
+            executeImageGenAsync(task.getId(), shot.getId());
+        }
+
+        BatchResultVO vo = new BatchResultVO();
+        vo.setBatchId(batchId);
+        vo.setTaskIds(taskIds);
+        return vo;
+    }
+
+    @Override
+    public BatchResultVO batchVideo(Long episodeId) {
+        List<Shot> shots = getShotsByEpisodeId(episodeId);
+        String batchId = UUID.randomUUID().toString();
+        List<Long> taskIds = new ArrayList<>();
+
+        for (Shot shot : shots) {
+            if (shot.getPromptEn() == null || shot.getPromptEn().isBlank()) continue;
+            Task task = new Task();
+            task.setType("video_gen");
+            task.setShotId(shot.getId());
+            task.setEpisodeId(episodeId);
+            Episode ep = episodeMapper.selectById(episodeId);
+            if (ep != null) task.setProjectId(ep.getProjectId());
+            task.setBatchId(batchId);
+            task.setStatus(0);
+            task.setPollCount(0);
+            taskMapper.insert(task);
+            taskIds.add(task.getId());
+            executeVideoGenAsync(task.getId(), shot.getId());
+        }
+
+        BatchResultVO vo = new BatchResultVO();
+        vo.setBatchId(batchId);
+        vo.setTaskIds(taskIds);
+        return vo;
+    }
+
+    // ==================== 内部方法 ====================
+
+    /**
+     * 安全地将对象序列化为 JSON 字符串
+     */
+    private String toJsonString(Object obj) {
+        try {
+            return objectMapper.writeValueAsString(obj);
+        } catch (Exception e) {
+            log.error("JSON 序列化失败", e);
+            return null;
+        }
+    }
+
+    /**
+     * 校验项目存在性和归属
+     */
+    private Project getProjectById(Long projectId) {
+        Project project = projectMapper.selectById(projectId);
+        if (project == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        Long currentUserId = StpUtil.getLoginIdAsLong();
+        if (!project.getUserId().equals(currentUserId)) {
+            throw new BusinessException(ErrorCode.NOT_PROJECT_OWNER);
+        }
+        return project;
+    }
+
+    /**
+     * 从 prompt_config 表获取 prompt，不存在的 key 使用静态模板
+     */
+    private String getPromptText(String promptKey) {
+        LambdaQueryWrapper<PromptConfig> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(PromptConfig::getPromptKey, promptKey)
+               .eq(PromptConfig::getDeleted, 0)
+               .last("LIMIT 1");
+        PromptConfig config = promptConfigMapper.selectOne(wrapper);
+        if (config != null && config.getPromptText() != null) {
+            return config.getPromptText();
+        }
+
+        // 回退：读取静态资源模板
+        try {
+            String templateFile = "templates/ai/" + promptKey + "_response.json";
+            ClassPathResource resource = new ClassPathResource(templateFile);
+            if (resource.exists()) {
+                try (InputStream is = resource.getInputStream()) {
+                    byte[] bytes = FileCopyUtils.copyToByteArray(is);
+                    return new String(bytes, StandardCharsets.UTF_8);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("读取静态模板失败, key: {}", promptKey);
+        }
+
+        throw new BusinessException(40400, "Prompt 配置不存在: " + promptKey);
+    }
+
+    /**
+     * 解析 AI 返回的 JSON 并创建分镜
+     */
+    private void parseAndCreateShots(Long episodeId, String aiResult) {
+        try {
+            JsonNode array = objectMapper.readTree(aiResult);
+            int sortOrder = 0;
+            if (array.isArray()) {
+                for (JsonNode node : array) {
+                    Shot shot = new Shot();
+                    shot.setEpisodeId(episodeId);
+                    shot.setPrompt(node.has("prompt") ? node.get("prompt").asText() : "");
+                    shot.setDuration(node.has("duration") ? node.get("duration").asInt() : 10);
+                    shot.setSceneType(node.has("sceneType") ? node.get("sceneType").asText() : null);
+                    shot.setCameraMove(node.has("cameraMove") ? node.get("cameraMove").asText() : null);
+                    shot.setSortOrder(sortOrder++);
+                    shot.setFollowLast(1);
+                    shot.setPromptStatus("pending");
+                    shot.setImageStatus("pending");
+                    shot.setVideoStatus("pending");
+                    shotMapper.insert(shot);
+                }
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("解析 AI 分镜结果失败", e);
+        }
+    }
+
+    /**
+     * 获取分镜绑定的资产参考图（主图）
+     */
+    private List<String> getAssetReferenceImages(Long shotId) {
+        LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
+        refWrapper.eq(ShotAssetRef::getShotId, shotId);
+        List<ShotAssetRef> refs = shotAssetRefMapper.selectList(refWrapper);
+
+        if (refs.isEmpty()) return List.of();
+
+        List<Long> assetIds = refs.stream().map(ShotAssetRef::getAssetId).distinct().toList();
+        List<Asset> assets = assetMapper.selectBatchIds(assetIds);
+
+        List<String> images = new ArrayList<>();
+        for (Asset asset : assets) {
+            // 解析 reference_images JSON 数组，取第一张作为主参考图
+            if (asset.getReferenceImages() != null && !asset.getReferenceImages().isBlank()) {
+                try {
+                    JsonNode arr = objectMapper.readTree(asset.getReferenceImages());
+                    if (arr.isArray() && arr.size() > 0) {
+                        images.add(arr.get(0).asText());
+                    }
+                } catch (Exception e) {
+                    // 如果解析失败，直接当做单个 URL
+                    images.add(asset.getReferenceImages());
+                }
+            }
+        }
+        return images;
+    }
+
+    /**
+     * 批量绑定资产到分镜
+     */
+    private void bindAssetsToShot(Long shotId, List<Long> assetIds) {
+        for (Long assetId : assetIds) {
+            Asset asset = assetMapper.selectById(assetId);
+            if (asset == null) continue;
+
+            LambdaQueryWrapper<ShotAssetRef> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(ShotAssetRef::getShotId, shotId)
+                   .eq(ShotAssetRef::getAssetId, assetId);
+            if (shotAssetRefMapper.selectCount(wrapper) > 0) continue;
+
+            ShotAssetRef ref = new ShotAssetRef();
+            ref.setShotId(shotId);
+            ref.setAssetId(assetId);
+            ref.setAssetType(asset.getAssetType());
+            shotAssetRefMapper.insert(ref);
+        }
+    }
+
+    /**
+     * 获取分集下所有分镜
+     */
+    private List<Shot> getShotsByEpisodeId(Long episodeId) {
+        LambdaQueryWrapper<Shot> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Shot::getEpisodeId, episodeId).orderByAsc(Shot::getSortOrder);
+        return shotMapper.selectList(wrapper);
+    }
+
+    /**
+     * Episode 转 VO
+     */
     private EpisodeVO toEpisodeVO(Episode episode) {
         EpisodeVO vo = new EpisodeVO();
         vo.setId(episode.getId());
         vo.setProjectId(episode.getProjectId());
         vo.setTitle(episode.getTitle());
+        vo.setSummary(episode.getSummary());
         vo.setSortOrder(episode.getSortOrder());
         vo.setContent(episode.getContent());
-        vo.setStatus(episode.getStatus());
+        vo.setParseStatus(episode.getParseStatus());
+        vo.setParseError(episode.getParseError());
         vo.setCreateTime(episode.getCreateTime());
         vo.setUpdateTime(episode.getUpdateTime());
         return vo;
     }
 
-    private SceneVO toSceneVO(Scene scene) {
-        SceneVO vo = new SceneVO();
-        vo.setId(scene.getId());
-        vo.setEpisodeId(scene.getEpisodeId());
-        vo.setTitle(scene.getTitle());
-        vo.setSortOrder(scene.getSortOrder());
-        vo.setContent(scene.getContent());
-        vo.setStatus(scene.getStatus());
-        vo.setCreateTime(scene.getCreateTime());
-        vo.setUpdateTime(scene.getUpdateTime());
-        return vo;
-    }
-
     /**
-     * Shot 转 VO，使用预加载的关联数据避免 N+1 查询
+     * Shot 转 VO
      */
     private ShotVO toShotVO(Shot shot,
-                            Map<Long, List<ShotAssetRef>> refsByShot,
-                            Map<Long, Asset> assetMap,
-                            Map<Long, AiTask> taskMap) {
+                            java.util.Map<Long, List<ShotAssetRef>> refsByShot,
+                            java.util.Map<Long, Asset> assetMap) {
         ShotVO vo = new ShotVO();
         vo.setId(shot.getId());
-        vo.setSceneId(shot.getSceneId());
+        vo.setEpisodeId(shot.getEpisodeId());
         vo.setSortOrder(shot.getSortOrder());
         vo.setPrompt(shot.getPrompt());
         vo.setPromptEn(shot.getPromptEn());
+        vo.setDuration(shot.getDuration());
+        vo.setSceneType(shot.getSceneType());
+        vo.setCameraMove(shot.getCameraMove());
         vo.setGeneratedImageUrl(shot.getGeneratedImageUrl());
         vo.setGeneratedVideoUrl(shot.getGeneratedVideoUrl());
-        vo.setStatus(shot.getStatus());
-        vo.setReviewComment(shot.getReviewComment());
-        vo.setVersion(shot.getVersion());
-        vo.setGenerationAttempts(shot.getGenerationAttempts());
+        vo.setLastFrameUrl(shot.getLastFrameUrl());
+        vo.setFollowLast(shot.getFollowLast());
+        vo.setDraftContent(shot.getDraftContent());
+        vo.setPromptStatus(shot.getPromptStatus());
+        vo.setImageStatus(shot.getImageStatus());
+        vo.setVideoStatus(shot.getVideoStatus());
+        vo.setErrorMsg(shot.getErrorMsg());
+        vo.setCreateTime(shot.getCreateTime());
+        vo.setUpdateTime(shot.getUpdateTime());
 
         // 填充关联资产
         List<ShotAssetRef> refs = refsByShot.get(shot.getId());
@@ -508,7 +922,6 @@ public class ContentServiceImpl implements ContentService {
                 ShotAssetRefVO refVO = new ShotAssetRefVO();
                 refVO.setAssetId(ref.getAssetId());
                 refVO.setAssetType(ref.getAssetType());
-
                 Asset asset = assetMap.get(ref.getAssetId());
                 if (asset != null) {
                     refVO.setAssetName(asset.getName());
@@ -521,23 +934,6 @@ public class ContentServiceImpl implements ContentService {
             vo.setAssetRefs(assetRefVOs);
         }
 
-        // 填充最新 AI 任务
-        AiTask latestTask = taskMap.get(shot.getId());
-        if (latestTask != null) {
-            ShotAiTaskVO taskVO = new ShotAiTaskVO();
-            taskVO.setTaskId(latestTask.getId());
-            taskVO.setTaskType(latestTask.getTaskType());
-            taskVO.setStatus(latestTask.getStatus());
-            vo.setCurrentAiTask(taskVO);
-        }
-
         return vo;
-    }
-
-    private void addFailure(BatchReviewResult result, Long shotId, String reason) {
-        BatchReviewResult.FailedDetail detail = new BatchReviewResult.FailedDetail();
-        detail.setShotId(shotId);
-        detail.setReason(reason);
-        result.getFailedDetails().add(detail);
     }
 }
