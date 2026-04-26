@@ -1,9 +1,14 @@
 <template>
   <el-container class="app-layout">
     <el-aside class="sidebar" width="220px">
-      <div class="sidebar-logo" @click="router.push({ name: 'ProjectList' })">
-        <el-icon :size="34" class="text-neon"><VideoPlay /></el-icon>
-        <span>AI漫剧生产平台</span>
+      <div class="sidebar-logo scanline" @click="router.push({ name: 'ProjectList' })">
+        <div class="logo-mark">
+          <el-icon :size="30"><VideoPlay /></el-icon>
+        </div>
+        <div>
+          <span>LanYan OS</span>
+          <small>AI DRAMA COMMAND</small>
+        </div>
       </div>
 
       <div class="sidebar-menu">
@@ -23,7 +28,8 @@
     <el-container class="main-container">
       <el-header class="app-header">
         <div>
-          <h1 class="page-title text-neon">{{ pageTitle }}</h1>
+          <p class="hud-kicker page-kicker">Production Matrix</p>
+          <h1 class="page-title hud-title text-neon">{{ pageTitle }}</h1>
           <p class="page-subtitle">{{ pageSubtitle }}</p>
         </div>
 
@@ -34,7 +40,7 @@
             </el-avatar>
             <div>
               <strong>{{ authStore.displayName }}</strong>
-              <span>个人中心</span>
+              <span>Operator Online</span>
             </div>
           </div>
           <template #dropdown>
@@ -262,26 +268,66 @@ onBeforeUnmount(() => {
 .app-layout {
   min-height: 100vh;
   background:
-    radial-gradient(circle at top left, rgba(100, 108, 255, 0.22), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(16, 185, 129, 0.16), transparent 26%),
+    radial-gradient(circle at top left, rgba(92, 241, 255, 0.18), transparent 28%),
+    radial-gradient(circle at bottom right, rgba(255, 204, 102, 0.12), transparent 26%),
     $bg-page;
 }
 
 .sidebar {
-  background: rgba(14, 16, 28, 0.94);
-  border-right: 1px solid rgba(100, 108, 255, 0.18);
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(8, 31, 45, 0.96), rgba(3, 7, 13, 0.94)),
+    $bg-page;
+  border-right: 1px solid rgba(92, 241, 255, 0.18);
   padding: 20px 16px;
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 20px;
+    right: -1px;
+    width: 1px;
+    height: 160px;
+    background: linear-gradient(transparent, $border-glow-color, transparent);
+    box-shadow: 0 0 18px rgba(92, 241, 255, 0.7);
+  }
 }
 
 .sidebar-logo {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 12px;
+  min-height: 74px;
+  padding: 12px;
+  border: 1px solid rgba(92, 241, 255, 0.22);
+  border-radius: 18px;
+  background: rgba(92, 241, 255, 0.06);
   color: $text-primary;
-  font-size: 16px;
-  font-weight: 700;
+  font-family: $font-display;
+  font-size: 18px;
+  font-weight: 800;
   margin-bottom: 28px;
   cursor: pointer;
+
+  small {
+    display: block;
+    margin-top: 2px;
+    color: $text-tertiary;
+    font-size: 10px;
+    letter-spacing: 0.2em;
+  }
+}
+
+.logo-mark {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: #031018;
+  background: $primary-gradient;
+  border-radius: 14px;
+  box-shadow: 0 0 26px rgba(92, 241, 255, 0.35);
 }
 
 .sidebar-menu {
@@ -296,15 +342,22 @@ onBeforeUnmount(() => {
   gap: 10px;
   min-height: 44px;
   padding: 0 14px;
-  border-radius: 12px;
+  border: 1px solid transparent;
+  border-radius: 14px;
   color: $text-secondary;
   cursor: pointer;
   transition: all $transition-fast;
 
   &.active {
-    color: #fff;
-    background: $primary-gradient;
-    box-shadow: 0 12px 28px rgba(100, 108, 255, 0.28);
+    color: $text-primary;
+    background: linear-gradient(90deg, rgba(92, 241, 255, 0.18), rgba(125, 255, 178, 0.06));
+    border-color: rgba(92, 241, 255, 0.35);
+    box-shadow: 0 12px 32px rgba(92, 241, 255, 0.12);
+  }
+
+  &:hover:not(.disabled) {
+    border-color: rgba(92, 241, 255, 0.26);
+    transform: translateX(3px);
   }
 
   &.disabled {
@@ -317,19 +370,26 @@ onBeforeUnmount(() => {
 }
 
 .app-header {
-  height: 72px;
+  height: 86px;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 0 $page-padding;
-  border-bottom: 1px solid rgba(100, 108, 255, 0.12);
-  background: rgba(10, 10, 18, 0.72);
-  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(92, 241, 255, 0.14);
+  background: rgba(3, 7, 13, 0.68);
+  backdrop-filter: blur(18px);
+}
+
+.page-kicker {
+  margin: 0 0 4px;
+  color: $accent-yellow;
+  font-size: 11px;
 }
 
 .page-title {
   margin: 0;
-  font-size: 24px;
+  font-size: 28px;
+  line-height: 1;
 }
 
 .page-subtitle {
@@ -340,6 +400,7 @@ onBeforeUnmount(() => {
 
 .app-main {
   padding: $page-padding;
+  position: relative;
 }
 
 .user-entry {
@@ -373,8 +434,14 @@ onBeforeUnmount(() => {
   }
 
   .sidebar-logo span,
+  .sidebar-logo small,
   .menu-item span {
     display: none;
+  }
+
+  .sidebar-logo {
+    justify-content: center;
+    padding: 10px;
   }
 }
 </style>

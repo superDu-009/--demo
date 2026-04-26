@@ -1,5 +1,7 @@
 package com.lanyan.aidrama.common;
 
+import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotPermissionException;
 import jakarta.servlet.http.HttpServletResponse;
 import com.lanyan.aidrama.common.exception.TosException;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,23 @@ import java.util.stream.Collectors;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    @ExceptionHandler(NotLoginException.class)
+    public Result<Void> handleNotLoginException(NotLoginException e, HttpServletResponse response) {
+        response.setStatus(HttpStatus.UNAUTHORIZED.value());
+        log.warn("未登录或登录态失效: type={}", e.getType());
+        if (NotLoginException.TOKEN_TIMEOUT.equals(e.getType())) {
+            return Result.fail(ErrorCode.TOKEN_EXPIRED);
+        }
+        return Result.fail(ErrorCode.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(NotPermissionException.class)
+    public Result<Void> handleNotPermissionException(NotPermissionException e, HttpServletResponse response) {
+        response.setStatus(HttpStatus.FORBIDDEN.value());
+        log.warn("无权限访问: permission={}", e.getPermission());
+        return Result.fail(ErrorCode.FORBIDDEN);
+    }
 
     /**
      * TOS异常处理

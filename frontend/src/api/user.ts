@@ -22,11 +22,16 @@ export const userApi = {
     request.get<never, ApiResponse<UserInfoVO>>('/user/info'),
 
   updateUsername: (data: UpdateUsernamePayload) =>
-    request.put('/user/username', data),
+    request.put('/user/username', undefined, { params: { newUsername: data.username } }),
 
   updateAvatar: (data: UpdateAvatarPayload) =>
-    request.put('/user/avatar', data),
+    request.put('/user/avatar', undefined, { params: { avatarUrl: data.avatarUrl } }),
 
   updatePassword: (data: UpdatePasswordPayload) =>
-    request.put('/user/password', data)
+    request.put('/user/password', undefined, {
+      params: {
+        oldPassword: data.oldPassword,
+        newPassword: data.newPassword
+      }
+    })
 }

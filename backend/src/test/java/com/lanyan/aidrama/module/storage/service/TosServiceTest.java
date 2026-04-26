@@ -1,67 +1,67 @@
 package com.lanyan.aidrama.module.storage.service;
 
-import cn.hutool.core.io.FileUtil;
-import cn.hutool.json.JSONUtil;
+import com.lanyan.aidrama.common.BusinessException;
+import com.lanyan.aidrama.config.TosConfig;
 import com.lanyan.aidrama.module.storage.dto.PresignResult;
 import com.lanyan.aidrama.module.storage.dto.TosCompleteRequest;
-import com.lanyan.aidrama.common.exception.TosException;
-import com.lanyan.aidrama.module.storage.service.TosService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import static org.junit.jupiter.api.Assertions.*;
+import org.springframework.test.util.ReflectionTestUtils;
 
-/**
- * TosService单元测试
- * 注意：测试前需要在application-test.yml中填写真实TOS配置
- */
-@SpringBootTest
-public class TosServiceTest {
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-    @Autowired
+class TosServiceTest {
+
     private TosService tosService;
 
-    /**
-     * 测试生成预签名上传URL功能
-     * 验证新filekey生成规则是否符合要求
-     */
-    @Test
-    public void testGeneratePresignUrl() {
-        // 测试生成预签名URL（前端上传的图片）
-        PresignResult result = tosService.generatePresignUrl("111.jpeg", "image/jpeg", "backend", 1L);
-        System.out.println(JSONUtil.toJsonStr(result));
-        tosService.uploadFromBytes(FileUtil.readBytes("/Users/mac/Downloads/111.jpeg"), result.getFileKey());
+    @BeforeEach
+    void setUp() {
+        TosConfig tosConfig = new TosConfig();
+        ReflectionTestUtils.setField(tosConfig, "accessKey", "ak");
+        ReflectionTestUtils.setField(tosConfig, "secretKey", "sk");
+        ReflectionTestUtils.setField(tosConfig, "endpoint", "tos-s3-cn-beijing.volces.com");
+        ReflectionTestUtils.setField(tosConfig, "region", "cn-beijing");
+        ReflectionTestUtils.setField(tosConfig, "bucket", "unit-test-bucket");
+        tosService = new TosService(tosConfig);
     }
 
-    /**
-     * 测试字节上传 + 上传完成校验 + 删除功能
-     */
     @Test
-    public void testUploadAndVerifyFlow() {
-        // 1. 测试字节上传
-        byte[] testData = "Hello Volcengine TOS".getBytes();
-        String fileKey = "test/unit_test_hello.txt";
-        String publicUrl = tosService.uploadFromBytes(testData, fileKey);
-        assertNotNull(publicUrl);
-        System.out.println("字节上传成功，公开访问URL: " + publicUrl);
+    void generatePresignUrlShouldFollowCurrentContract() {
+        PresignResult result = tosService.generatePresignUrlWithUser(
+                "cover.png", "image/png", "project", "1001", 7L);
 
-        // 2. 测试上传完成校验
+        assertNotNull(result.getUploadUrl());
+        assertTrue(result.getUploadUrl().contains("unit-test-bucket"));
+        assertEquals("users/7/project/1001/7_cover.png", result.getFileKey());
+        assertEquals(3600, result.getExpireSeconds());
+    }
+
+    @Test
+    void completeUploadShouldRejectForeignFileKeyBeforeRemoteCheck() {
         TosCompleteRequest req = new TosCompleteRequest();
-        req.setFileKey(fileKey);
-        req.setBusinessId(1L);
-        req.setFileSize((long) testData.length);
-        req.setOriginalName("hello.txt");
-        String verifiedUrl = tosService.completeUpload(req);
-        assertNotNull(verifiedUrl);
-        assertEquals(publicUrl, verifiedUrl);
-        System.out.println("上传完成校验通过");
+        req.setFileKey("users/8/project/1001/8_cover.png");
+        req.setSource("project");
+        req.setUserId(7L);
 
-        // 3. 测试删除文件
-        tosService.deleteFile(fileKey);
-        System.out.println("文件删除成功");
+        BusinessException ex = assertThrows(BusinessException.class, () -> tosService.completeUpload(req));
+        assertEquals(40102, ex.getCode());
+    }
 
-        // 4. 测试删除后校验应该抛出异常
-        assertThrows(TosException.class, () -> tosService.completeUpload(req), "删除后校验应该失败");
-        System.out.println("删除后校验失败验证通过");
+    @Test
+    void publicUrlShouldSupportEndpointWithScheme() {
+        TosConfig tosConfig = new TosConfig();
+        ReflectionTestUtils.setField(tosConfig, "accessKey", "ak");
+        ReflectionTestUtils.setField(tosConfig, "secretKey", "sk");
+        ReflectionTestUtils.setField(tosConfig, "endpoint", "https://tos-s3-cn-shanghai.volces.com");
+        ReflectionTestUtils.setField(tosConfig, "region", "cn-shanghai");
+        ReflectionTestUtils.setField(tosConfig, "bucket", "bucket-a");
+        TosService service = new TosService(tosConfig);
+
+        assertEquals(
+                "https://bucket-a.tos-cn-shanghai.volces.com/users/1/avatar/0/1_a.png",
+                service.buildPublicUrl("users/1/avatar/0/1_a.png"));
     }
 }

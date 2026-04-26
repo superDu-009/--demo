@@ -12,12 +12,17 @@ import software.amazon.awssdk.auth.credentials.StaticCredentialsProvider;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
+import software.amazon.awssdk.services.s3.model.NoSuchKeyException;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.PutObjectResponse;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import software.amazon.awssdk.core.sync.RequestBody;
 
-import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 
 /**
@@ -46,7 +51,7 @@ public class TosService {
 
         // 构建 TOS 客户端
         S3Presigner presigner = S3Presigner.builder()
-                .endpointOverride(URI.create(tosConfig.getEndpoint()))
+                .endpointOverride(tosConfig.getEndpointUri())
                 .region(Region.of(tosConfig.getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(tosConfig.getAccessKey(), tosConfig.getSecretKey())))
@@ -68,6 +73,7 @@ public class TosService {
                 new com.lanyan.aidrama.module.storage.dto.PresignResult();
         result.setUploadUrl(presignedRequest.url().toString());
         result.setFileKey(fileKey);
+        result.setExpireSeconds(3600);
         return result;
     }
 
@@ -82,7 +88,7 @@ public class TosService {
 
         // 使用 S3 客户端校验文件存在
         S3Client s3Client = S3Client.builder()
-                .endpointOverride(URI.create(tosConfig.getEndpoint()))
+                .endpointOverride(tosConfig.getEndpointUri())
                 .region(Region.of(tosConfig.getRegion()))
                 .credentialsProvider(StaticCredentialsProvider.create(
                         AwsBasicCredentials.create(tosConfig.getAccessKey(), tosConfig.getSecretKey())))
@@ -98,7 +104,59 @@ public class TosService {
         }
 
         // 返回公网可访问 URL
-        return "https://" + tosConfig.getBucket() + "." + tosConfig.getEndpoint().replace("https://", "").replace("tos-s3-", "tos-") + "/" + req.getFileKey();
+        return buildPublicUrl(req.getFileKey());
+    }
+
+    public byte[] readFileBytes(String fileKey) {
+        try (S3Client s3Client = buildS3Client()) {
+            return s3Client.getObjectAsBytes(GetObjectRequest.builder()
+                            .bucket(tosConfig.getBucket())
+                            .key(fileKey)
+                            .build())
+                    .asByteArray();
+        } catch (NoSuchKeyException e) {
+            throw new TosException("文件在 TOS 中不存在: " + fileKey);
+        } catch (Exception e) {
+            throw new TosException("读取 TOS 文件失败: " + fileKey);
+        }
+    }
+
+    public String readFileAsText(String fileKey) {
+        return new String(readFileBytes(fileKey), StandardCharsets.UTF_8);
+    }
+
+    public String uploadTextWithUser(String source, String businessId, Long userId, String fileName, String text) {
+        String fileKey = buildFileKey(source, businessId, userId, fileName);
+        try (S3Client s3Client = buildS3Client()) {
+            PutObjectResponse response = s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(tosConfig.getBucket())
+                            .key(fileKey)
+                            .contentType("text/plain; charset=utf-8")
+                            .build(),
+                    RequestBody.fromString(text, StandardCharsets.UTF_8));
+            log.info("上传文本到 TOS 成功, key: {}, eTag: {}", fileKey, response.eTag());
+            return fileKey;
+        } catch (Exception e) {
+            throw new TosException("上传文本到 TOS 失败: " + fileKey);
+        }
+    }
+
+    public String uploadBytesWithUser(String source, String businessId, Long userId, String fileName, byte[] bytes, String contentType) {
+        String fileKey = buildFileKey(source, businessId, userId, fileName);
+        try (S3Client s3Client = buildS3Client()) {
+            PutObjectResponse response = s3Client.putObject(
+                    PutObjectRequest.builder()
+                            .bucket(tosConfig.getBucket())
+                            .key(fileKey)
+                            .contentType(contentType)
+                            .build(),
+                    RequestBody.fromBytes(bytes));
+            log.info("上传二进制文件到 TOS 成功, key: {}, eTag: {}", fileKey, response.eTag());
+            return fileKey;
+        } catch (Exception e) {
+            throw new TosException("上传文件到 TOS 失败: " + fileKey);
+        }
     }
 
     /**
@@ -110,5 +168,51 @@ public class TosService {
 
     private String buildPrefix(String source, Long userId) {
         return String.format("users/%d", userId);
+    }
+
+    public String buildPublicUrl(String fileKey) {
+        return "https://" + tosConfig.getBucket() + "." + tosConfig.getEndpointHost().replace("tos-s3-", "tos-") + "/" + fileKey;
+    }
+
+    /**
+     * 构建小说文件的完整公网访问URL（预签名下载URL）
+     * 有效期1小时，返回的 URL 可直接在浏览器中打开下载/预览
+     */
+    public String buildNovelPublicUrl(String fileKey) {
+        if (fileKey == null || fileKey.isBlank()) {
+            return fileKey;
+        }
+        // 如果已经是完整URL则直接返回
+        if (fileKey.startsWith("http://") || fileKey.startsWith("https://")) {
+            return fileKey;
+        }
+
+        // 使用 S3 预签名生成 GET 下载 URL
+        S3Presigner presigner = S3Presigner.builder()
+                .endpointOverride(tosConfig.getEndpointUri())
+                .region(Region.of(tosConfig.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(tosConfig.getAccessKey(), tosConfig.getSecretKey())))
+                .build();
+
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+                .signatureDuration(Duration.ofMinutes(60))
+                .getObjectRequest(GetObjectRequest.builder()
+                        .bucket(tosConfig.getBucket())
+                        .key(fileKey)
+                        .build())
+                .build();
+
+        PresignedGetObjectRequest presignedRequest = presigner.presignGetObject(presignRequest);
+        return presignedRequest.url().toString();
+    }
+
+    private S3Client buildS3Client() {
+        return S3Client.builder()
+                .endpointOverride(tosConfig.getEndpointUri())
+                .region(Region.of(tosConfig.getRegion()))
+                .credentialsProvider(StaticCredentialsProvider.create(
+                        AwsBasicCredentials.create(tosConfig.getAccessKey(), tosConfig.getSecretKey())))
+                .build();
     }
 }

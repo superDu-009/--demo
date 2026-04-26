@@ -125,8 +125,7 @@ const validate = async (): Promise<AssetCreateRequest | AssetUpdateRequest | fal
     description: form.description?.trim() || undefined,
     referenceImages: form.referenceImages,
     parentIds: isSubAsset.value ? form.parentIds : [],
-    draftContent: form.draftContent?.trim() || undefined,
-    stylePreset: null
+    draftContent: form.draftContent?.trim() || undefined
   }
   if (props.mode === 'edit') {
     const { assetType, ...updatePayload } = payload

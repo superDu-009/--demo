@@ -192,3 +192,17 @@ INSERT INTO `prompt_config` (`prompt_key`, `prompt_text`, `model`, `description`
 ('shot_split', '你是一个专业的分镜拆分专家。请将以下分集内容按标准时长（{duration}秒）拆分为多个分镜。每个分镜包含：prompt(中文提示词), sceneType(场景类型), cameraMove(运镜方式), duration(时长), lines(台词)。只输出JSON数组，不要其他文字。', 'doubao-seed-2-0-pro-260215', '分镜拆分', 1),
 ('asset_extract', '你是一个专业的资产提取专家。请从以下分集文本中提取所有角色(character)、场景(scene)、物品(prop)资产。每个资产包含：name(名称), type(类型), description(描述)。只输出JSON数组，不要其他文字。', 'doubao-seed-2-0-pro-260215', '资产提取', 1),
 ('prompt_gen', '你是一个专业的AI绘画提示词生成专家。请根据以下分镜描述生成英文的图片生成提示词（prompt），要求描述清晰、具体、适合AI绘画。只输出英文提示词，不要其他文字。', 'doubao-seed-2-0-pro-260215', '分镜提示词生成', 1);
+
+-- ============================================================
+-- 初始化默认用户
+-- 用户名: admin
+-- 密码: 123456
+-- BCrypt strength=12
+-- ============================================================
+INSERT INTO `sys_user` (`id`, `username`, `password`, `nickname`, `avatar_url`, `status`, `deleted`)
+VALUES (1, 'admin', '$2b$12$8j4MzrG3ZDiVQra98hZFbuOl/w8RVftFoxPyBIw1Bzq1CmGFG8/Iq', '管理员', NULL, 1, 0)
+ON DUPLICATE KEY UPDATE
+    `password` = VALUES(`password`),
+    `nickname` = VALUES(`nickname`),
+    `status` = VALUES(`status`),
+    `deleted` = VALUES(`deleted`);

@@ -1,9 +1,16 @@
 package com.lanyan.aidrama.module.task.service;
 
+import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
+import com.lanyan.aidrama.entity.Episode;
+import com.lanyan.aidrama.entity.Project;
+import com.lanyan.aidrama.entity.Shot;
 import com.lanyan.aidrama.entity.Task;
+import com.lanyan.aidrama.mapper.EpisodeMapper;
+import com.lanyan.aidrama.mapper.ProjectMapper;
+import com.lanyan.aidrama.mapper.ShotMapper;
 import com.lanyan.aidrama.mapper.TaskMapper;
 import com.lanyan.aidrama.module.task.dto.BatchTaskStatusRequest;
 import com.lanyan.aidrama.module.task.dto.TaskVO;
@@ -24,6 +31,9 @@ import java.util.stream.Collectors;
 public class TaskService {
 
     private final TaskMapper taskMapper;
+    private final ProjectMapper projectMapper;
+    private final EpisodeMapper episodeMapper;
+    private final ShotMapper shotMapper;
 
     /**
      * 查询任务状态
@@ -33,6 +43,7 @@ public class TaskService {
         if (task == null) {
             throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
         }
+        validateTaskOwnership(task);
         return toVO(task);
     }
 
@@ -50,6 +61,7 @@ public class TaskService {
         }
 
         return taskMapper.selectList(wrapper).stream()
+                .filter(this::ownsTask)
                 .map(this::toVO)
                 .toList();
     }
@@ -92,6 +104,47 @@ public class TaskService {
         task.setPollCount(pollCount + 1);
         task.setLastPollTime(java.time.LocalDateTime.now());
         taskMapper.updateById(task);
+    }
+
+    public void markTaskPolling(Task task) {
+        task.setStatus(1);
+        task.setNextPollTime(java.time.LocalDateTime.now().plusSeconds(5));
+        task.setLastPollTime(java.time.LocalDateTime.now());
+        taskMapper.updateById(task);
+    }
+
+    private void validateTaskOwnership(Task task) {
+        if (!ownsTask(task)) {
+            throw new BusinessException(ErrorCode.FORBIDDEN);
+        }
+    }
+
+    private boolean ownsTask(Task task) {
+        Long projectId = resolveProjectId(task);
+        if (projectId == null) {
+            return false;
+        }
+        Project project = projectMapper.selectById(projectId);
+        return project != null && project.getUserId().equals(StpUtil.getLoginIdAsLong());
+    }
+
+    private Long resolveProjectId(Task task) {
+        if (task.getProjectId() != null) {
+            return task.getProjectId();
+        }
+        if (task.getEpisodeId() != null) {
+            Episode episode = episodeMapper.selectById(task.getEpisodeId());
+            return episode != null ? episode.getProjectId() : null;
+        }
+        if (task.getShotId() != null) {
+            Shot shot = shotMapper.selectById(task.getShotId());
+            if (shot == null) {
+                return null;
+            }
+            Episode episode = episodeMapper.selectById(shot.getEpisodeId());
+            return episode != null ? episode.getProjectId() : null;
+        }
+        return null;
     }
 
     private TaskVO toVO(Task task) {

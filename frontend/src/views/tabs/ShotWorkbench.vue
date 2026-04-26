@@ -1,9 +1,9 @@
 <template>
   <div class="shot-workbench-page">
-    <aside class="episode-panel card-glass border-neon">
+    <aside class="episode-panel card-glass border-neon hud-panel hud-corner">
       <div class="panel-head">
         <p class="eyebrow">Episode Board</p>
-        <h3>分集列表</h3>
+        <h3 class="hud-title">分集列表</h3>
       </div>
 
       <div v-for="episode in episodes" :key="episode.id" class="episode-card" :class="{ active: episode.id === currentEpisodeId }">
@@ -35,10 +35,10 @@
     </aside>
 
     <main class="workbench-main">
-      <section class="toolbar card-glass border-neon">
+      <section class="toolbar card-glass border-neon hud-panel hud-corner">
         <div>
           <p class="eyebrow">Shot Workbench</p>
-          <h3>{{ currentEpisode?.title || '请选择分集' }}</h3>
+          <h3 class="hud-title">{{ currentEpisode?.title || '请选择分集' }}</h3>
         </div>
         <div class="toolbar-actions">
           <el-select v-model="filterKind" size="small" style="width: 140px">
@@ -55,7 +55,7 @@
       </section>
 
       <section class="shot-list" v-loading="loadingShots">
-        <article v-for="shot in visibleShots" :key="shot.id" class="shot-card card-glass">
+        <article v-for="shot in visibleShots" :key="shot.id" class="shot-card card-glass hud-corner">
           <div class="shot-header">
             <div class="shot-title">
               <el-checkbox :model-value="selectedShotIds.includes(shot.id)" @change="toggleSelect(shot.id)" />
@@ -348,11 +348,9 @@ const confirmSplitEpisode = async (episode: EpisodeVO) => {
   try {
     const templateKey = splitRuleByEpisode.value[episode.id] || SHOT_SPLIT_TEMPLATE_OPTIONS[2].value
     const res = await contentApi.splitShots(episode.id, {
-      templateKey,
-      durationSeconds: getDurationSeconds(templateKey),
-      overwrite
+      durationSeconds: getDurationSeconds(templateKey)
     })
-    const task = await waitForTask(res.data.taskId)
+    const task = await waitForTask(res.data)
     if (task.status === AiTaskStatus.Failed) {
       throw new Error(task.errorMsg || '分镜拆分失败')
     }
@@ -380,9 +378,14 @@ const generationMeta = (shot: ShotVO, kind: GenerateKind) => {
   }
 }
 
-const ensureGenerateConfirm = async (kind: GenerateKind) => {
+const ensureGenerateConfirm = async (kind: GenerateKind, params?: { ratio?: string; definition?: string }) => {
   if (kind === 'prompt') return
-  await ElMessageBox.confirm('当前参数与全局配置不一致是否确定生成', '参数确认', { type: 'warning' })
+  if (!params) return
+  const ratioChanged = Boolean(params.ratio && params.ratio !== projectDefaults.value.ratio)
+  const definitionChanged = Boolean(params.definition && params.definition !== projectDefaults.value.definition)
+  if (ratioChanged || definitionChanged) {
+    await ElMessageBox.confirm('当前参数与全局配置不一致是否确定生成', '参数确认', { type: 'warning' })
+  }
 }
 
 const runGenerate = async (shot: ShotVO, kind: GenerateKind) => {
@@ -391,16 +394,12 @@ const runGenerate = async (shot: ShotVO, kind: GenerateKind) => {
       await ensureGenerateConfirm(kind)
     }
     taskingMap.value[taskKey(shot.id, kind)] = true
-    const payload = {
-      ratio: projectDefaults.value.ratio as BatchGenerateRequest['ratio'],
-      definition: projectDefaults.value.definition as BatchGenerateRequest['definition']
-    }
     const res = kind === 'prompt'
       ? await contentApi.generatePrompt(shot.id)
       : kind === 'image'
-        ? await contentApi.generateImage(shot.id, payload)
-        : await contentApi.generateVideo(shot.id, payload)
-    const task = await waitForTask(res.data.taskId)
+        ? await contentApi.generateImage(shot.id)
+        : await contentApi.generateVideo(shot.id)
+    const task = await waitForTask(res.data)
     if (task.status === AiTaskStatus.Failed) {
       throw new Error(task.errorMsg || '生成失败')
     }
@@ -417,6 +416,10 @@ const runGenerate = async (shot: ShotVO, kind: GenerateKind) => {
 
 const batchGenerate = async (kind: GenerateKind) => {
   if (!currentEpisodeId.value || selectedShotIds.value.length === 0) return
+  if (selectedShotIds.value.length !== currentShots.value.length) {
+    ElMessage.warning('当前后端批量生成按整集执行，请先全选当前分集分镜后再批量生成')
+    return
+  }
   try {
     if (kind !== 'prompt') {
       await ensureGenerateConfirm(kind)
@@ -425,9 +428,7 @@ const batchGenerate = async (kind: GenerateKind) => {
       taskingMap.value[taskKey(shotId, kind)] = true
     })
     const payload: BatchGenerateRequest = {
-      shotIds: selectedShotIds.value,
-      ratio: projectDefaults.value.ratio as BatchGenerateRequest['ratio'],
-      definition: projectDefaults.value.definition as BatchGenerateRequest['definition']
+      shotIds: selectedShotIds.value
     }
     const res = kind === 'prompt'
       ? await contentApi.batchGeneratePrompt(currentEpisodeId.value, payload)
@@ -479,9 +480,7 @@ const openEditShotDialog = (shot: ShotVO) => {
 }
 
 const saveShotDraft = async (shotId: number) => {
-  await contentApi.saveDraft(shotId, {
-    draftContent: shotForm.draftContent.trim()
-  })
+  await contentApi.saveDraft(shotId, shotForm.draftContent.trim())
 }
 
 const submitShot = async () => {
@@ -507,9 +506,7 @@ const submitShot = async () => {
     } else {
       const createRes = await contentApi.createShot(currentEpisodeId.value, payload)
       if (shotForm.draftContent.trim()) {
-        await contentApi.saveDraft(createRes.data, {
-          draftContent: shotForm.draftContent.trim()
-        })
+        await contentApi.saveDraft(createRes.data, shotForm.draftContent.trim())
       }
       ElMessage.success('分镜已创建')
     }
@@ -562,8 +559,7 @@ onMounted(async () => {
 
 .eyebrow {
   margin: 0 0 6px;
-  color: $accent-green;
-  text-transform: uppercase;
+  color: $accent-yellow;
   font-size: 12px;
 }
 
@@ -571,17 +567,21 @@ onMounted(async () => {
 .toolbar h3 {
   margin: 0;
   color: $text-primary;
+  font-size: 26px;
 }
 
 .episode-card {
   margin-top: 14px;
   padding: 14px;
-  border: 1px solid rgba(100, 108, 255, 0.12);
+  border: 1px solid rgba(92, 241, 255, 0.14);
   border-radius: 16px;
+  background: rgba(3, 7, 13, 0.22);
+  transition: all $transition-fast;
 
   &.active {
-    border-color: rgba(100, 108, 255, 0.4);
-    background: rgba(100, 108, 255, 0.06);
+    border-color: rgba(92, 241, 255, 0.5);
+    background: rgba(92, 241, 255, 0.08);
+    box-shadow: inset 3px 0 0 $border-glow-color;
   }
 }
 
@@ -665,6 +665,7 @@ onMounted(async () => {
 
 .shot-card {
   padding: 18px;
+  border-color: rgba(92, 241, 255, 0.18);
 }
 
 .shot-header,
@@ -723,7 +724,10 @@ onMounted(async () => {
     height: 160px;
     border-radius: 12px;
     object-fit: cover;
-    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(92, 241, 255, 0.14);
+    background:
+      linear-gradient(135deg, rgba(92, 241, 255, 0.08), transparent),
+      rgba(255, 255, 255, 0.04);
   }
 }
 

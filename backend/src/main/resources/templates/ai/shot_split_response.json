@@ -3,7 +3,7 @@
     "prompt": "分镜中文描述",
     "sceneType": "场景类型",
     "cameraMove": "运镜方式",
-    "duration": 10,
+    "duration": 15,
     "lines": ["台词1", "台词2"]
   }
 ]

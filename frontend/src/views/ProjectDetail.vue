@@ -1,9 +1,9 @@
 <template>
   <div class="project-detail-page">
-    <section class="project-overview card-glass border-neon" v-loading="loading">
+    <section class="project-overview card-glass border-neon hud-panel hud-corner" v-loading="loading">
       <div>
         <p class="eyebrow">Project Detail</p>
-        <h2>{{ projectInfo?.name || '项目详情' }}</h2>
+        <h2 class="hud-title">{{ projectInfo?.name || '项目详情' }}</h2>
         <p class="desc">{{ projectInfo?.description || '未填写项目描述。' }}</p>
       </div>
       <div class="meta-grid">
@@ -26,7 +26,7 @@
       <button
         v-for="tab in tabList"
         :key="tab.name"
-        class="tab-item"
+        class="tab-item hud-corner"
         :class="{ active: route.name === tab.name }"
         @click="router.push({ name: tab.name, params: route.params })"
       >
@@ -89,19 +89,18 @@ watch(() => route.params.id, (id) => {
   display: flex;
   justify-content: space-between;
   gap: 24px;
-  padding: 22px 24px;
+  padding: 26px;
 
   .eyebrow {
     margin: 0 0 6px;
-    color: $accent-green;
-    text-transform: uppercase;
+    color: $accent-yellow;
     font-size: 12px;
   }
 
   h2 {
     margin: 0;
     color: $text-primary;
-    font-size: 30px;
+    font-size: 38px;
   }
 
   .desc {
@@ -120,9 +119,11 @@ watch(() => route.params.id, (id) => {
 }
 
 .meta-card {
+  position: relative;
   padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(92, 241, 255, 0.18);
+  border-radius: 16px;
+  background: rgba(92, 241, 255, 0.055);
 
   span,
   strong {
@@ -137,6 +138,7 @@ watch(() => route.params.id, (id) => {
   strong {
     margin-top: 6px;
     color: $text-primary;
+    font-family: $font-display;
     font-size: 18px;
   }
 }
@@ -152,16 +154,23 @@ watch(() => route.params.id, (id) => {
   gap: 8px;
   height: 44px;
   padding: 0 18px;
-  border: 1px solid rgba(100, 108, 255, 0.18);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(92, 241, 255, 0.18);
+  border-radius: 14px;
+  background: rgba(92, 241, 255, 0.045);
   color: $text-secondary;
   cursor: pointer;
+  transition: all $transition-fast;
 
   &.active {
-    color: #fff;
+    color: #031018;
     background: $primary-gradient;
     border-color: transparent;
+    box-shadow: 0 0 22px rgba(92, 241, 255, 0.22);
+  }
+
+  &:hover {
+    border-color: rgba(92, 241, 255, 0.42);
+    transform: translateY(-1px);
   }
 }
 

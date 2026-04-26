@@ -110,11 +110,34 @@ public class VideoGenClient {
                 JsonNode content = root.get("content");
                 if (content != null && content.isArray()) {
                     for (JsonNode item : content) {
-                        if ("video_url".equals(item.get("type").asText())) {
+                        if (!item.has("type")) {
+                            continue;
+                        }
+                        String type = item.get("type").asText();
+                        if ("video_url".equals(type)) {
                             JsonNode videoUrlNode = item.get("video_url");
                             if (videoUrlNode != null && videoUrlNode.has("url")) {
                                 result.put("videoUrl", videoUrlNode.get("url").asText());
                             }
+                        } else if ("image_url".equals(type) || "last_frame".equals(type) || "last_frame_image_url".equals(type)) {
+                            JsonNode imageUrlNode = item.has("image_url") ? item.get("image_url") : item.get("last_frame_image_url");
+                            if (imageUrlNode != null && imageUrlNode.has("url")) {
+                                result.put("lastFrameUrl", imageUrlNode.get("url").asText());
+                            }
+                        }
+                    }
+                }
+
+                JsonNode data = root.get("data");
+                if (data != null) {
+                    if (!result.containsKey("videoUrl") && data.has("video_url")) {
+                        result.put("videoUrl", data.get("video_url").asText());
+                    }
+                    if (!result.containsKey("lastFrameUrl")) {
+                        if (data.has("last_frame_url")) {
+                            result.put("lastFrameUrl", data.get("last_frame_url").asText());
+                        } else if (data.has("last_frame")) {
+                            result.put("lastFrameUrl", data.get("last_frame").asText());
                         }
                     }
                 }

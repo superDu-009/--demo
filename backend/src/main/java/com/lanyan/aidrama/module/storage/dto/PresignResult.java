@@ -15,4 +15,7 @@ public class PresignResult {
 
     @Schema(description = "文件 Key（上传完成后保存用）")
     private String fileKey;
+
+    @Schema(description = "过期秒数")
+    private Integer expireSeconds;
 }

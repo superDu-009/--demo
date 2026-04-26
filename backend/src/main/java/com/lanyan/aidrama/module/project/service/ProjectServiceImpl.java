@@ -9,7 +9,9 @@ import com.lanyan.aidrama.common.ErrorCode;
 import com.lanyan.aidrama.common.PageResult;
 import com.lanyan.aidrama.entity.Project;
 import com.lanyan.aidrama.mapper.ProjectMapper;
+import com.lanyan.aidrama.module.content.service.NovelTextExtractor;
 import com.lanyan.aidrama.module.project.dto.*;
+import com.lanyan.aidrama.module.storage.service.TosService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -23,6 +25,8 @@ import org.springframework.stereotype.Service;
 public class ProjectServiceImpl implements ProjectService {
 
     private final ProjectMapper projectMapper;
+    private final TosService tosService;
+    private final NovelTextExtractor novelTextExtractor;
 
     @Override
     public PageResult<ProjectVO> listProjects(Long userId, int page, int size) {
@@ -59,6 +63,15 @@ public class ProjectServiceImpl implements ProjectService {
         }
 
         projectMapper.insert(project);
+
+        if (project.getNovelOriginalTosPath() != null && !project.getNovelOriginalTosPath().isBlank()) {
+            String plainText = extractPlainText(project.getNovelOriginalTosPath(), req.getNovelFile().getFileName());
+            String textFileName = buildNovelTextFileName(req.getNovelFile().getFileName(), project.getId());
+            String textFileKey = tosService.uploadTextWithUser("project-text", String.valueOf(project.getId()), userId, textFileName, plainText);
+            project.setNovelTosPath(textFileKey);
+            projectMapper.updateById(project);
+        }
+
         log.info("创建项目成功, projectId: {}, userId: {}", project.getId(), userId);
         return project.getId();
     }
@@ -116,8 +129,8 @@ public class ProjectServiceImpl implements ProjectService {
         vo.setId(project.getId());
         vo.setName(project.getName());
         vo.setDescription(project.getDescription());
-        vo.setNovelOriginalTosPath(project.getNovelOriginalTosPath());
-        vo.setNovelTosPath(project.getNovelTosPath());
+        vo.setNovelOriginalTosPath(tosService.buildNovelPublicUrl(project.getNovelOriginalTosPath()));
+        vo.setNovelTosPath(tosService.buildNovelPublicUrl(project.getNovelTosPath()));
         vo.setRatio(project.getRatio());
         vo.setDefinition(project.getDefinition());
         vo.setStyle(project.getStyle());
@@ -126,4 +139,26 @@ public class ProjectServiceImpl implements ProjectService {
         vo.setUpdateTime(project.getUpdateTime());
         return vo;
     }
+
+    private String extractPlainText(String fileKey, String originalFileName) {
+        try {
+            byte[] bytes = tosService.readFileBytes(fileKey);
+            return novelTextExtractor.extract(bytes, originalFileName);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("小说文本解析失败, fileKey: {}", fileKey, e);
+            throw new BusinessException(ErrorCode.FILE_TYPE_NOT_SUPPORTED.getCode(), "小说文件解析失败");
+        }
+    }
+
+    private String buildNovelTextFileName(String originalFileName, Long projectId) {
+        if (originalFileName == null || originalFileName.isBlank()) {
+            return "project-" + projectId + ".txt";
+        }
+        int dotIndex = originalFileName.lastIndexOf('.');
+        String prefix = dotIndex > 0 ? originalFileName.substring(0, dotIndex) : originalFileName;
+        return prefix + ".txt";
+    }
+
 }

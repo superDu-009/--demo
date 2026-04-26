@@ -100,7 +100,7 @@ public class AssetController {
     @GetMapping("/asset/{id}/references")
     @Operation(summary = "资产引用查询", description = "分页查询资产被哪些分镜引用")
     public Result<PageResult<ShotReferenceVO>> getAssetReferences(
-            @PathVariable Long assetId,
+            @PathVariable("id") Long assetId,
             @RequestParam(required = false, defaultValue = "1") int page,
             @RequestParam(required = false, defaultValue = "20") int size) {
         return Result.ok(assetService.getAssetReferences(assetId, page, size));

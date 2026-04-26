@@ -1,6 +1,6 @@
 <template>
-  <article class="asset-card card-glass border-neon">
-    <div class="cover">
+  <article class="asset-card card-glass border-neon hud-corner">
+    <div class="cover scanline">
       <img v-if="coverUrl" :src="coverUrl" alt="资产缩略图" />
       <div v-else class="empty-cover">待生成</div>
       <div v-if="safeChildPreviewList.length > 0" class="child-strip">
@@ -84,7 +84,9 @@ const generateText = computed(() => GENERATION_STATUS_MAP[props.generatingStatus
 .cover {
   position: relative;
   height: 180px;
-  background: rgba(255, 255, 255, 0.04);
+  background:
+    linear-gradient(135deg, rgba(92, 241, 255, 0.1), rgba(255, 204, 102, 0.04)),
+    rgba(255, 255, 255, 0.04);
 
   img {
     width: 100%;
@@ -99,6 +101,8 @@ const generateText = computed(() => GENERATION_STATUS_MAP[props.generatingStatus
   align-items: center;
   justify-content: center;
   color: $text-secondary;
+  font-family: $font-display;
+  letter-spacing: 0.14em;
 }
 
 .child-strip {
@@ -128,6 +132,8 @@ const generateText = computed(() => GENERATION_STATUS_MAP[props.generatingStatus
   h3 {
     margin: 0;
     color: $text-primary;
+    font-family: $font-display;
+    font-size: 22px;
   }
 
   p {
@@ -146,6 +152,7 @@ const generateText = computed(() => GENERATION_STATUS_MAP[props.generatingStatus
 
 .actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 16px;
 }

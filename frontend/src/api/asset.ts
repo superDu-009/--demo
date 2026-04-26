@@ -1,19 +1,19 @@
 import request from '@/api'
 import type {
   ApiResponse,
+  AssetDuplicateVO,
   AssetCreateRequest,
+  AssetTreeNode,
   AssetUpdateRequest,
   AssetVO,
-  GenerateTaskResponse,
   PageResult,
   ShotReferenceVO
 } from '@/types'
 
-type BackendAssetVO = Omit<AssetVO, 'referenceImages' | 'stylePreset'> & {
+type BackendAssetVO = Omit<AssetVO, 'referenceImages'> & {
   referenceImages: string | string[] | null
   parentIds?: string | number[] | null
   draftContent?: string | null
-  stylePreset: string | Record<string, any> | null
 }
 
 const parseJsonField = <T>(value: unknown, fallback: T): T => {
@@ -30,8 +30,7 @@ const normalizeAsset = (asset: BackendAssetVO): AssetVO => ({
   ...asset,
   referenceImages: parseJsonField<string[]>(asset.referenceImages, []),
   parentIds: parseJsonField<number[]>(asset.parentIds, []),
-  draftContent: asset.draftContent || '',
-  stylePreset: parseJsonField<Record<string, any> | null>(asset.stylePreset, null)
+  draftContent: asset.draftContent || ''
 })
 
 const serializeAssetPayload = <T extends AssetCreateRequest | AssetUpdateRequest>(data: T) => ({
@@ -41,11 +40,25 @@ const serializeAssetPayload = <T extends AssetCreateRequest | AssetUpdateRequest
     : data.referenceImages,
   parentIds: Array.isArray(data.parentIds)
     ? JSON.stringify(data.parentIds)
-    : data.parentIds,
-  stylePreset: data.stylePreset && typeof data.stylePreset !== 'string'
-    ? JSON.stringify(data.stylePreset)
-    : data.stylePreset
+    : data.parentIds
 })
+
+const flattenTree = (
+  nodes: AssetTreeNode[],
+  parentId?: number,
+  result: Array<{ id: number; parentIds: number[]; childIds: number[] }> = []
+) => {
+  nodes.forEach((node) => {
+    const childIds = (node.children || []).map(child => child.id)
+    result.push({
+      id: node.id,
+      parentIds: parentId ? [parentId] : [],
+      childIds
+    })
+    flattenTree(node.children || [], node.id, result)
+  })
+  return result
+}
 
 export const assetApi = {
   list: async (projectId: number, params?: { assetType?: string; keyword?: string; page?: number; size?: number }) => {
@@ -86,22 +99,31 @@ export const assetApi = {
     request.put(`/asset/${id}/confirm`),
 
   generateImage: (id: number) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/asset/${id}/image/generate`),
+    request.post<never, ApiResponse<number>>(`/asset/${id}/image/generate`),
 
   extract: (projectId: number, data: { episodeIds: number[] }) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/project/${projectId}/assets/extract`, data),
+    request.post<never, ApiResponse<number>>(`/project/${projectId}/assets/extract`, undefined, {
+      params: { episodeId: data.episodeIds[0] }
+    }),
 
   getExtractStatus: (projectId: number) =>
-    request.get<never, ApiResponse<{ taskId?: number | null; status?: string; errorMsg?: string | null }>>(`/project/${projectId}/assets/extract/status`),
+    request.get<never, ApiResponse<{ id?: number | null; status?: number | null; errorMsg?: string | null }>>(`/project/${projectId}/assets/extract/status`),
 
   getDuplicates: (projectId: number) =>
-    request.get<never, ApiResponse<Array<{ assetIds: number[]; score: number }>>>(`/project/${projectId}/assets/duplicates`),
+    request.get<never, ApiResponse<AssetDuplicateVO[]>>(`/project/${projectId}/assets/duplicates`),
 
-  getTree: (projectId: number) =>
-    request.get<never, ApiResponse<Array<{ id: number; parentIds: number[]; childIds: number[] }>>>(`/project/${projectId}/assets/tree`),
+  getTree: async (projectId: number) => {
+    const res = await request.get<never, ApiResponse<AssetTreeNode[]>>(`/project/${projectId}/assets/tree`)
+    return {
+      ...res,
+      data: flattenTree(res.data || [])
+    }
+  },
 
   updateRelations: (id: number, data: { parentIds: number[] }) =>
-    request.put(`/asset/${id}/relations`, data),
+    request.put(`/asset/${id}/relations`, undefined, {
+      params: { parentIds: JSON.stringify(data.parentIds || []) }
+    }),
 
   getReferences: (assetId: number, params?: { page?: number; size?: number }) =>
     request.get<never, ApiResponse<PageResult<ShotReferenceVO>>>(`/asset/${assetId}/references`, { params })

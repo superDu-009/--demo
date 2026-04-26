@@ -1,6 +1,24 @@
 <template>
   <div class="project-list-page">
-    <section class="toolbar">
+    <section class="project-hero card-glass border-neon hud-panel hud-corner">
+      <div>
+        <p class="eyebrow">Project Dock</p>
+        <h2 class="hud-title">创作舰队</h2>
+        <p>每个项目是一条生产链路，从小说解析到分镜、资产和生成任务集中调度。</p>
+      </div>
+      <div class="hero-stats">
+        <div>
+          <span>项目数</span>
+          <strong>{{ projectList.length }}</strong>
+        </div>
+        <div>
+          <span>已上传剧本</span>
+          <strong>{{ uploadedCount }}</strong>
+        </div>
+      </div>
+    </section>
+
+    <section class="toolbar card-glass">
       <el-input
         v-model="searchKeyword"
         class="search-box"
@@ -8,13 +26,14 @@
         clearable
         @input="fetchProjectList"
       />
-      <el-button class="btn-gradient" @click="openCreateDialog">新建项目</el-button>
+      <vi-button color="blue" radius="round" mutate @click="openCreateDialog">新建项目</vi-button>
     </section>
 
     <section class="project-grid" v-loading="loading">
-      <article v-for="project in filteredList" :key="project.id" class="project-card card-glass border-neon">
-        <div class="cover" :style="{ backgroundImage: `url(${getProjectCover(project)})` }" @click="goToDetail(project.id)">
+      <article v-for="project in filteredList" :key="project.id" class="project-card card-glass border-neon hud-corner">
+        <div class="cover scanline" :style="{ backgroundImage: `url(${getProjectCover(project)})` }" @click="goToDetail(project.id)">
           <span class="style-tag">{{ project.style || '未设置风格' }}</span>
+          <span class="launch-tag">OPEN</span>
         </div>
         <div class="card-body">
           <div class="card-head">
@@ -51,11 +70,11 @@
           <TosUpload
             v-model="formData.novelTosPath"
             :project-id="0"
-            file-type="other"
+            file-type="novel"
             button-text="上传小说"
-            tip-text="支持 txt/docx/md，最大 100MB"
-            accept=".txt,.docx,.md"
-            :allowed-types="['text/plain', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/markdown', 'text/x-markdown', 'application/markdown']"
+            tip-text="支持 txt/md/doc/docx/pdf，最大 100MB"
+            accept=".txt,.md,.markdown,.doc,.docx,.pdf"
+            :allowed-types="['text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/markdown', 'text/x-markdown', 'application/markdown', 'application/pdf']"
             :max-file-size="100 * 1024 * 1024"
             @uploaded="handleNovelUploaded"
           />
@@ -144,6 +163,7 @@ const filteredList = computed(() => {
   if (!keyword) return projectList.value
   return projectList.value.filter(project => project.name.includes(keyword))
 })
+const uploadedCount = computed(() => projectList.value.filter(project => Boolean(project.novelTosPath)).length)
 
 const fetchProjectList = async () => {
   loading.value = true
@@ -214,9 +234,12 @@ const handleSubmit = async () => {
       ElMessage.success('项目已更新')
     } else {
       await projectApi.create({
-        ...formData,
         name: formData.name.trim(),
         description: formData.description?.trim(),
+        novelFile: formData.novelFile,
+        ratio: formData.ratio,
+        definition: formData.definition,
+        style: formData.style,
         styleDesc: formData.style === '自定义' ? formData.styleDesc?.trim() : ''
       })
       ElMessage.success('项目已创建')
@@ -253,7 +276,6 @@ const goToDetail = (id: number) => {
 const formatDate = (date: string) => dayjs(date).format('YYYY-MM-DD HH:mm')
 
 const getProjectCover = (project: ProjectVO) => {
-  if (project.thumbUrl) return project.thumbUrl
   const map: Record<string, string> = {
     '日漫风': '/assets/images/project-cover-japanese.png',
     '国漫风': '/assets/images/project-cover-chinese.png',
@@ -275,10 +297,68 @@ onMounted(fetchProjectList)
   gap: 18px;
 }
 
+.project-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px;
+
+  h2 {
+    margin: 0;
+    color: $text-primary;
+    font-size: 38px;
+  }
+
+  p {
+    max-width: 720px;
+    margin: 10px 0 0;
+    color: $text-secondary;
+    line-height: 1.7;
+  }
+}
+
+.eyebrow {
+  margin: 0 0 8px;
+  color: $accent-yellow;
+  font-size: 12px;
+}
+
+.hero-stats {
+  display: grid;
+  grid-template-columns: repeat(2, 118px);
+  gap: 12px;
+
+  div {
+    padding: 16px;
+    border: 1px solid rgba(92, 241, 255, 0.18);
+    border-radius: 16px;
+    background: rgba(92, 241, 255, 0.06);
+  }
+
+  span,
+  strong {
+    display: block;
+  }
+
+  span {
+    color: $text-tertiary;
+    font-size: 12px;
+  }
+
+  strong {
+    margin-top: 8px;
+    color: $text-primary;
+    font-family: $font-display;
+    font-size: 34px;
+  }
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;
   gap: 12px;
+  align-items: center;
+  padding: 14px;
 }
 
 .search-box {
@@ -293,6 +373,7 @@ onMounted(fetchProjectList)
 
 .project-card {
   overflow: hidden;
+  min-height: 374px;
 }
 
 .cover {
@@ -301,6 +382,15 @@ onMounted(fetchProjectList)
   background-size: cover;
   background-position: center;
   cursor: pointer;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      linear-gradient(180deg, transparent 35%, rgba(3, 7, 13, 0.82)),
+      linear-gradient(90deg, rgba(92, 241, 255, 0.18), transparent 42%);
+  }
 }
 
 .style-tag {
@@ -312,6 +402,18 @@ onMounted(fetchProjectList)
   background: rgba(10, 10, 18, 0.72);
   color: #fff;
   font-size: 12px;
+  z-index: 1;
+}
+
+.launch-tag {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  z-index: 1;
+  color: $accent-green;
+  font-family: $font-display;
+  font-size: 12px;
+  letter-spacing: 0.18em;
 }
 
 .card-body {
@@ -326,6 +428,8 @@ onMounted(fetchProjectList)
   h3 {
     margin: 0;
     color: $text-primary;
+    font-family: $font-display;
+    font-size: 22px;
   }
 
   p {
@@ -350,9 +454,29 @@ onMounted(fetchProjectList)
   span {
     padding: 6px 10px;
     border-radius: 10px;
-    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(92, 241, 255, 0.16);
+    background: rgba(92, 241, 255, 0.06);
     color: $text-secondary;
     font-size: 12px;
+  }
+}
+
+@media (max-width: 840px) {
+  .project-hero {
+    flex-direction: column;
+  }
+
+  .hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .search-box {
+    max-width: none;
   }
 }
 

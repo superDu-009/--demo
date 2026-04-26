@@ -1,9 +1,9 @@
 <template>
   <div class="script-preview-page">
-    <section class="toolbar card-glass border-neon">
+    <section class="toolbar card-glass border-neon hud-panel hud-corner">
       <div>
         <p class="eyebrow">Script Preview</p>
-        <h3>剧本预览</h3>
+        <h3 class="hud-title">剧本预览</h3>
         <p>原始剧本只读展示，每页 500 字，不修改源文本。</p>
       </div>
       <div class="toolbar-actions">
@@ -14,7 +14,7 @@
       </div>
     </section>
 
-    <section class="reader card-glass border-neon" v-loading="textLoading">
+    <section class="reader card-glass border-neon hud-corner scanline" v-loading="textLoading">
       <div class="reader-head">
         <span>{{ currentPage }}/{{ totalPages }}</span>
         <span v-if="projectInfo?.novelTosPath">{{ fileLabel }}</span>
@@ -149,10 +149,8 @@ const loadNovelText = async (project: ProjectVO) => {
 const runAnalysis = async () => {
   analysisSubmitting.value = true
   try {
-    const res = await contentApi.analyzeEpisodes(Number(route.params.id), {
-      templateKey: selectedTemplateKey.value
-    })
-    analyzeTaskId.value = res.data.taskId
+    const res = await contentApi.analyzeEpisodes(Number(route.params.id))
+    analyzeTaskId.value = res.data
     parseStatus.value = ParseStatus.Processing
     parseError.value = ''
     analysisDialogVisible.value = false
@@ -215,13 +213,14 @@ watch(parseStatus, (status) => {
 .eyebrow {
   margin: 0 0 6px;
   color: $accent-green;
-  text-transform: uppercase;
+  color: $accent-yellow;
   font-size: 12px;
 }
 
 .toolbar h3 {
   margin: 0;
   color: $text-primary;
+  font-size: 28px;
 }
 
 .toolbar p {
@@ -239,6 +238,9 @@ watch(parseStatus, (status) => {
   min-height: 580px;
   display: flex;
   flex-direction: column;
+  background:
+    linear-gradient(90deg, rgba(92, 241, 255, 0.06), transparent 18%),
+    rgba(7, 18, 30, 0.72);
 }
 
 .reader-head,
@@ -251,7 +253,11 @@ watch(parseStatus, (status) => {
 
 .reader-body {
   flex: 1;
-  padding: 26px 0;
+  margin: 20px 0;
+  padding: 28px;
+  border: 1px solid rgba(92, 241, 255, 0.12);
+  border-radius: 16px;
+  background: rgba(3, 7, 13, 0.38);
 }
 
 .page-text {
@@ -260,7 +266,7 @@ watch(parseStatus, (status) => {
   line-height: 2;
   font-size: 16px;
   color: $text-primary;
-  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  font-family: $font-body;
 }
 
 .error-text {

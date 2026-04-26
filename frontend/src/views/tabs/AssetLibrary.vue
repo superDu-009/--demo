@@ -1,18 +1,18 @@
 <template>
   <div class="asset-library-page">
-    <section class="toolbar card-glass border-neon">
+    <section class="toolbar card-glass border-neon hud-panel hud-corner">
       <div>
         <p class="eyebrow">Asset Library</p>
-        <h3>资产库</h3>
+        <h3 class="hud-title">资产库</h3>
         <p>角色、场景、道具、声音统一维护，支持父子资产关系树。</p>
       </div>
       <div class="toolbar-actions">
         <el-button @click="openExtractDialog">提取资产</el-button>
-        <el-button class="btn-gradient" @click="openCreateDialog">新建资产</el-button>
+        <vi-button color="green" radius="round" mutate @click="openCreateDialog">新建资产</vi-button>
       </div>
     </section>
 
-    <section class="filter-bar card-glass">
+    <section class="filter-bar card-glass hud-corner">
       <el-tabs v-model="assetType">
         <el-tab-pane label="角色" name="character" />
         <el-tab-pane label="场景" name="scene" />
@@ -181,7 +181,7 @@ const openEditDialog = (asset: AssetVO) => {
 }
 
 const checkDuplicates = async (focusAssetId?: number) => {
-  const res = await assetApi.getDuplicates(projectId).catch(() => ({ data: [] as Array<{ assetIds: number[]; score: number }> }))
+  const res = await assetApi.getDuplicates(projectId).catch(() => ({ data: [] as Array<{ assetIds: number[] }> }))
   const groups = res.data || []
   if (groups.length === 0) return
   const targetGroup = focusAssetId
@@ -257,10 +257,13 @@ const extractAssets = async () => {
     ElMessage.warning('请选择至少一个分集')
     return
   }
+  if (selectedEpisodeIds.value.length > 1) {
+    ElMessage.warning('当前后端仅支持单分集提取，将使用你选择的第一个分集')
+  }
   extracting.value = true
   try {
     const res = await assetApi.extract(projectId, { episodeIds: selectedEpisodeIds.value })
-    const task = await waitForTask(res.data.taskId)
+    const task = await waitForTask(res.data)
     if (task.status === AiTaskStatus.Failed) {
       throw new Error(task.errorMsg || '资产提取失败')
     }
@@ -293,20 +296,7 @@ const handleDelete = async (asset: AssetVO) => {
 }
 
 const generateAsset = async (asset: AssetVO) => {
-  generationState.value[asset.id] = GenerationStatus.Processing
-  try {
-    const res = await assetApi.generateImage(asset.id)
-    const task = await waitForTask(res.data.taskId)
-    generationState.value[asset.id] = task.status === AiTaskStatus.Success ? GenerationStatus.Success : GenerationStatus.Failed
-    if (task.status === AiTaskStatus.Failed) {
-      throw new Error(task.errorMsg || '资产生成失败')
-    }
-    await fetchAssets()
-    ElMessage.success('资产生成完成')
-  } catch (error: any) {
-    generationState.value[asset.id] = GenerationStatus.Failed
-    ElMessage.error(error.message || '资产生成失败')
-  }
+  ElMessage.warning(`资产「${asset.name}」当前仅支持上传参考图，后端尚未提供资产生图接口`)
 }
 
 const getParentNames = (asset: AssetVO) => {
@@ -351,13 +341,14 @@ onMounted(async () => {
 .eyebrow {
   margin: 0 0 6px;
   color: $accent-green;
-  text-transform: uppercase;
+  color: $accent-yellow;
   font-size: 12px;
 }
 
 .toolbar h3 {
   margin: 0;
   color: $text-primary;
+  font-size: 28px;
 }
 
 .toolbar p {
@@ -375,6 +366,7 @@ onMounted(async () => {
   justify-content: space-between;
   gap: 16px;
   align-items: center;
+  border: 1px solid rgba(92, 241, 255, 0.14);
 }
 
 .search-box,

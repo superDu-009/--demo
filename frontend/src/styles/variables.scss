@@ -1,33 +1,26 @@
 // styles/variables.scss — 系分第 10 节：UI 规范变量定义
 @use "sass:math";
 
-// ===== 赛博朋克元宇宙主题颜色 =====
-// 页面背景色（深空黑，带细微渐变）
-$bg-page: #0a0a12;
-// 卡片背景色（半透明毛玻璃效果）
-$bg-card: rgba(22, 24, 38, 0.7);
-// 边框主色（霓虹蓝紫渐变）
-$border-color: #3636d0;
-// 霓虹发光边框色
-$border-glow-color: #646cff;
-// 主色调（蓝紫渐变主色）
-$primary-color: #646cff;
-// 主色调渐变
-$primary-gradient: linear-gradient(135deg, #646cff 0%, #a855f7 100%);
-// 霓虹点缀色（粉）
-$accent-pink: #ec4899;
-// 霓虹点缀色（绿）
-$accent-green: #10b981;
-// 霓虹点缀色（黄）
-$accent-yellow: #f59e0b;
-// 文字主色（纯白带点蓝调）
-$text-primary: #f0f0ff;
-// 文字次要色
-$text-secondary: #b4b4d4;
-// 文字三级色
-$text-tertiary: #8888aa;
-// 文字禁用色
-$text-disabled: #555577;
+// ===== 未来影视控制舱主题颜色 =====
+$bg-page: #03070d;
+$bg-card: rgba(7, 18, 30, 0.76);
+$bg-panel-strong: rgba(8, 28, 42, 0.9);
+$border-color: rgba(92, 241, 255, 0.24);
+$border-glow-color: #5cf1ff;
+$primary-color: #5cf1ff;
+$primary-gradient: linear-gradient(135deg, #5cf1ff 0%, #7dffb2 48%, #ffcc66 100%);
+$secondary-gradient: linear-gradient(135deg, rgba(92, 241, 255, 0.24), rgba(255, 204, 102, 0.1));
+$accent-pink: #ff4fd8;
+$accent-green: #7dffb2;
+$accent-yellow: #ffcc66;
+$accent-orange: #ff7a45;
+$text-primary: #eefcff;
+$text-secondary: #9fc0c8;
+$text-tertiary: #5f7f8b;
+$text-disabled: #38515d;
+$shadow-neon: 0 0 26px rgba(92, 241, 255, 0.18), 0 22px 80px rgba(0, 0, 0, 0.42);
+$font-display: 'Rajdhani', 'DIN Condensed', 'Agency FB', 'PingFang SC', sans-serif;
+$font-body: 'Saira', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 
 // ===== 布局规范 =====
 // 页面内边距

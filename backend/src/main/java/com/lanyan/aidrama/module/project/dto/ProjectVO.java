@@ -21,10 +21,10 @@ public class ProjectVO {
     @Schema(description = "项目描述")
     private String description;
 
-    @Schema(description = "原始小说文件TOS路径")
+    @Schema(description = "原始小说文件TOS路径（完整公网URL，可直接访问）")
     private String novelOriginalTosPath;
 
-    @Schema(description = "解析后纯文本TOS路径")
+    @Schema(description = "解析后纯文本TOS路径（完整公网URL，可直接访问）")
     private String novelTosPath;
 
     @Schema(description = "画面比例")

@@ -31,14 +31,12 @@ export interface ProjectVO {
   id: number
   name: string
   description: string | null
+  novelOriginalTosPath?: string | null
   novelTosPath: string | null
-  thumbUrl?: string | null
   ratio?: ProjectRatio | null
   definition?: ProjectDefinition | null
   style?: ProjectStyle | null
   styleDesc?: string | null
-  stylePreset?: string | Record<string, any> | null
-  version?: number
   createTime: string
   updateTime: string
 }

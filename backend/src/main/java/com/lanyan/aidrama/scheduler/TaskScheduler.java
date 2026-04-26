@@ -2,12 +2,13 @@ package com.lanyan.aidrama.scheduler;
 
 import com.lanyan.aidrama.entity.Shot;
 import com.lanyan.aidrama.entity.Task;
-import com.lanyan.aidrama.entity.Episode;
+import com.lanyan.aidrama.entity.Project;
 import com.lanyan.aidrama.mapper.TaskMapper;
 import com.lanyan.aidrama.mapper.ShotMapper;
-import com.lanyan.aidrama.mapper.EpisodeMapper;
+import com.lanyan.aidrama.mapper.ProjectMapper;
 import com.lanyan.aidrama.module.aitask.client.DoubaoClient;
 import com.lanyan.aidrama.module.aitask.client.VideoGenClient;
+import com.lanyan.aidrama.module.storage.service.TosService;
 import com.lanyan.aidrama.module.task.service.TaskService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,6 +17,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.util.List;
 import java.util.Map;
 
@@ -30,9 +35,10 @@ public class TaskScheduler {
 
     private final TaskMapper taskMapper;
     private final ShotMapper shotMapper;
-    private final EpisodeMapper episodeMapper;
+    private final ProjectMapper projectMapper;
     private final DoubaoClient doubaoClient;
     private final VideoGenClient videoGenClient;
+    private final TosService tosService;
     private final TaskService taskService;
     private final ObjectMapper objectMapper;
 
@@ -100,6 +106,7 @@ public class TaskScheduler {
                     Shot shot = shotMapper.selectById(task.getShotId());
                     if (shot != null) {
                         shot.setGeneratedVideoUrl(videoUrl);
+                        shot.setLastFrameUrl(uploadLastFrameToTos(result.get("lastFrameUrl"), shot));
                         shot.setVideoStatus("success");
                         shotMapper.updateById(shot);
                     }
@@ -134,5 +141,72 @@ public class TaskScheduler {
     @Scheduled(fixedDelay = 600000, scheduler = "schedulerExecutor")
     public void cleanExpiredCache() {
         log.info("定时清理: 清理过期缓存");
+    }
+
+    private String uploadLastFrameToTos(String lastFrameUrl, Shot shot) {
+        if (lastFrameUrl == null || lastFrameUrl.isBlank() || shot == null) {
+            return null;
+        }
+
+        Project project = projectMapper.selectById(resolveProjectId(shot));
+        if (project == null) {
+            return null;
+        }
+
+        try {
+            HttpClient client = HttpClient.newHttpClient();
+            HttpRequest request = HttpRequest.newBuilder(URI.create(lastFrameUrl)).GET().build();
+            HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                throw new IllegalStateException("下载尾帧失败，HTTP状态码: " + response.statusCode());
+            }
+
+            String contentType = response.headers().firstValue("Content-Type").orElse("image/png");
+            String extension = resolveImageExtension(contentType, lastFrameUrl);
+            String fileKey = tosService.uploadBytesWithUser(
+                    "shot-last-frame",
+                    String.valueOf(shot.getId()),
+                    project.getUserId(),
+                    "shot-" + shot.getId() + "-last-frame." + extension,
+                    response.body(),
+                    contentType);
+            return tosService.buildPublicUrl(fileKey);
+        } catch (Exception e) {
+            log.error("上传尾帧到 TOS 失败, shotId: {}, lastFrameUrl: {}", shot.getId(), lastFrameUrl, e);
+            return null;
+        }
+    }
+
+    private Long resolveProjectId(Shot shot) {
+        Task task = taskMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Task>()
+                .eq(Task::getShotId, shot.getId())
+                .eq(Task::getType, "video_gen")
+                .orderByDesc(Task::getId)
+                .last("LIMIT 1"));
+        if (task != null && task.getProjectId() != null) {
+            return task.getProjectId();
+        }
+        return null;
+    }
+
+    private String resolveImageExtension(String contentType, String url) {
+        if (contentType != null) {
+            if (contentType.contains("jpeg")) {
+                return "jpg";
+            }
+            if (contentType.contains("webp")) {
+                return "webp";
+            }
+        }
+        if (url != null) {
+            String lower = url.toLowerCase();
+            if (lower.contains(".jpg") || lower.contains(".jpeg")) {
+                return "jpg";
+            }
+            if (lower.contains(".webp")) {
+                return "webp";
+            }
+        }
+        return "png";
     }
 }

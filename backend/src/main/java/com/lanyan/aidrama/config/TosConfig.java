@@ -46,7 +46,7 @@ public class TosConfig {
         // 构建客户端
         return S3Client.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .endpointOverride(URI.create(ENDPOINT_SCHEME + endpoint))
+                .endpointOverride(getEndpointUri())
                 .region(Region.of(region))
                 .build();
     }
@@ -60,7 +60,7 @@ public class TosConfig {
         AwsBasicCredentials credentials = AwsBasicCredentials.create(accessKey, secretKey);
         return S3Presigner.builder()
                 .credentialsProvider(StaticCredentialsProvider.create(credentials))
-                .endpointOverride(URI.create(ENDPOINT_SCHEME + endpoint))
+                .endpointOverride(getEndpointUri())
                 .region(Region.of(region))
                 .build();
     }
@@ -81,8 +81,26 @@ public class TosConfig {
         return endpoint;
     }
 
+    public URI getEndpointUri() {
+        return URI.create(normalizeEndpoint(endpoint));
+    }
+
+    public String getEndpointHost() {
+        return normalizeEndpoint(endpoint).replaceFirst("^https?://", "");
+    }
+
     public String getRegion() {
         return region;
     }
-}
 
+    private String normalizeEndpoint(String endpoint) {
+        if (endpoint == null || endpoint.isBlank()) {
+            return ENDPOINT_SCHEME;
+        }
+        String trimmed = endpoint.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+        return ENDPOINT_SCHEME + trimmed;
+    }
+}

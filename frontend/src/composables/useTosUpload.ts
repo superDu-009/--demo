@@ -1,7 +1,6 @@
 // composables/useTosUpload.ts — 系分第 8.3 节：TOS 预签名直传
 import { ref } from 'vue'
 import { tosApi } from '@/api/tos'
-import type { PresignResult, TosCompleteRequest } from '@/types'
 import { ElMessage } from 'element-plus'
 
 // 上传选项
@@ -54,8 +53,8 @@ export function useTosUpload() {
       const presignRes = await tosApi.presign({
         fileName: file.name,
         contentType,
-        source: 'frontend',
-        businessId: options.projectId
+        source: options.fileType,
+        businessId: String(options.projectId)
       })
       const presignResult = presignRes.data
 
@@ -63,34 +62,33 @@ export function useTosUpload() {
       await uploadToTos(presignResult.uploadUrl, file, contentType, options.onProgress)
 
       // 5. 通知后端上传完成（v1.1：complete 失败仅重试 1 次）
+      let publicUrl = ''
       try {
-        await tosApi.complete({
+        const completeRes = await tosApi.complete({
           fileKey: presignResult.fileKey,
-          businessId: options.projectId,
-          fileSize: file.size,
-          originalName: file.name
-        } as TosCompleteRequest)
+          source: options.fileType
+        })
+        publicUrl = completeRes.data
       } catch (completeError) {
         // v1.1：仅重试 1 次，重试前增加1秒延迟，降低后端压力
         try {
           await new Promise(resolve => setTimeout(resolve, 1000))
-          await tosApi.complete({
+          const completeRes = await tosApi.complete({
             fileKey: presignResult.fileKey,
-            businessId: options.projectId,
-            fileSize: file.size,
-            originalName: file.name
-          } as TosCompleteRequest)
+            source: options.fileType
+          })
+          publicUrl = completeRes.data
         } catch (e2) {
           ElMessage.error('文件已上传，但记录保存失败，请刷新后重试')
           throw e2
         }
       }
 
-      options.onSuccess?.(presignResult.accessUrl, presignResult.fileKey, {
+      options.onSuccess?.(publicUrl, presignResult.fileKey, {
         fileName: file.name,
         fileSize: file.size
       })
-      return presignResult.accessUrl
+      return publicUrl
     } catch (error: any) {
       // 预签名过期 → 重试最多3次，避免无限递归
       if ((error.code === 40005 || error.response?.data?.code === 40005) && retryCount < MAX_RETRY) {
@@ -140,7 +138,11 @@ export function useTosUpload() {
   const FILE_MAGIC_NUMBERS: Record<string, string[]> = {
     'image/png': ['89504E47'],
     'image/jpeg': ['FFD8FF', 'FFD8FFDB', 'FFD8FFE0', 'FFD8FFE1'],
+    'image/webp': ['52494646'],
     'video/mp4': ['0000001866747970', '0000002066747970'],
+    'application/pdf': ['25504446'],
+    'application/msword': ['D0CF11E0A1B11AE1'],
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': ['504B0304'],
     'text/plain': ['EFBBBF', 'FFFE', 'FEFF'], // UTF-8/UTF-16 BOM，无BOM纯文本后续补充逻辑
     'text/markdown': ['EFBBBF', 'FFFE', 'FEFF']
   }
@@ -153,7 +155,9 @@ export function useTosUpload() {
       md: 'text/markdown',
       markdown: 'text/markdown',
       txt: 'text/plain',
-      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      pdf: 'application/pdf'
     }
 
     return ext ? fallbackTypes[ext] || '' : ''

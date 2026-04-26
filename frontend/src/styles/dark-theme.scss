@@ -120,6 +120,17 @@ html.dark,
   }
 }
 
+.vi-button {
+  font-family: #{$font-display};
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.vi-tag,
+.vi-card {
+  border-color: #{$border-color} !important;
+}
+
 .vio-input {
   background: #{$bg-card} !important;
   border-color: #{$border-color} !important;
@@ -134,6 +145,17 @@ html.dark,
 .el-card {
   --el-card-bg-color: #{$bg-card} !important;
   border-color: #{$border-color} !important;
+}
+
+.el-button {
+  font-family: #{$font-body};
+}
+
+.el-tag {
+  border-radius: 999px !important;
+  background: rgba(92, 241, 255, 0.08) !important;
+  border-color: rgba(92, 241, 255, 0.26) !important;
+  color: #{$text-secondary} !important;
 }
 
 .el-table {
@@ -202,7 +224,7 @@ html.dark,
     &.is-active {
       background: #{$primary-gradient} !important;
       border-color: #{$primary-color} !important;
-            color: $text-primary !important;
+      color: #031018 !important;
     }
   }
 
@@ -242,7 +264,7 @@ html.dark,
   }
 
   &.is-selected {
-    background: rgba(100, 108, 255, 0.2) !important;
+    background: rgba(92, 241, 255, 0.18) !important;
     color: #{$primary-color} !important;
     font-weight: 500 !important;
   }

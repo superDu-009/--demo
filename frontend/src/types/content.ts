@@ -22,10 +22,6 @@ export interface EpisodeVO {
   updateTime: string
 }
 
-export interface EpisodeAnalyzeRequest {
-  templateKey: string
-}
-
 export interface EpisodeAnalyzeStatusVO {
   taskId?: number | null
   parseStatus: ParseStatus
@@ -33,9 +29,7 @@ export interface EpisodeAnalyzeStatusVO {
 }
 
 export interface ShotSplitRequest {
-  templateKey: string
   durationSeconds: 10 | 12 | 15
-  overwrite?: boolean
 }
 
 export interface ShotAssetRef {
@@ -90,16 +84,8 @@ export interface ShotUpdateRequest extends ShotCreateRequest {
   lastFrameUrl?: string | null
 }
 
-export interface ShotDraftRequest {
-  draftContent: string
-}
-
-export interface BatchGenerateRequest extends GeneratePayload {
+export interface BatchGenerateRequest {
   shotIds: number[]
-}
-
-export interface GenerateTaskResponse {
-  taskId: number
 }
 
 export interface BatchGenerateResponse {

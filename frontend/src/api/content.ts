@@ -3,14 +3,10 @@ import type {
   ApiResponse,
   BatchGenerateRequest,
   BatchGenerateResponse,
-  EpisodeAnalyzeRequest,
   EpisodeAnalyzeStatusVO,
   EpisodeCreateRequest,
   EpisodeVO,
-  GeneratePayload,
-  GenerateTaskResponse,
   ShotCreateRequest,
-  ShotDraftRequest,
   ShotSplitRequest,
   ShotUpdateRequest,
   ShotVO
@@ -25,8 +21,8 @@ export const contentApi = {
   listEpisodes: (projectId: number) =>
     request.get<never, ApiResponse<EpisodeVO[]>>(`/project/${projectId}/episodes`),
 
-  analyzeEpisodes: (projectId: number, data: EpisodeAnalyzeRequest) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/project/${projectId}/episodes/analyze`, data),
+  analyzeEpisodes: (projectId: number) =>
+    request.post<never, ApiResponse<number>>(`/project/${projectId}/episodes/analyze`),
 
   getAnalyzeStatus: (projectId: number) =>
     request.get<never, ApiResponse<EpisodeAnalyzeStatusVO>>(`/project/${projectId}/episodes/analyze/status`),
@@ -44,7 +40,9 @@ export const contentApi = {
     request.get<never, ApiResponse<ShotVO[]>>(`/episode/${episodeId}/shots`, { params }),
 
   splitShots: (episodeId: number, data: ShotSplitRequest) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/episode/${episodeId}/shots/split`, data),
+    request.post<never, ApiResponse<number>>(`/episode/${episodeId}/shots/split`, undefined, {
+      params: { duration: data.durationSeconds }
+    }),
 
   createShot: (episodeId: number, data: ShotCreateRequest) =>
     request.post<never, ApiResponse<number>>(`/episode/${episodeId}/shots`, normalizeShotPayload(data)),
@@ -56,26 +54,28 @@ export const contentApi = {
     request.delete(`/shot/${id}`),
 
   sortShot: (id: number, sortOrder: number) =>
-    request.put(`/shot/${id}/sort`, { sortOrder }),
+    request.put(`/shot/${id}/sort`, undefined, { params: { sortOrder } }),
 
-  saveDraft: (id: number, data: ShotDraftRequest) =>
-    request.post<number, ApiResponse<number>>(`/shot/${id}/draft`, data),
+  saveDraft: (id: number, draftContent: string) =>
+    request.post<string, ApiResponse<void>>(`/shot/${id}/draft`, draftContent, {
+      headers: { 'Content-Type': 'text/plain' }
+    }),
 
   generatePrompt: (id: number) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/shot/${id}/prompt/generate`),
+    request.post<never, ApiResponse<number>>(`/shot/${id}/prompt/generate`),
 
-  generateImage: (id: number, data: GeneratePayload) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/shot/${id}/image/generate`, data),
+  generateImage: (id: number) =>
+    request.post<never, ApiResponse<number>>(`/shot/${id}/image/generate`),
 
-  generateVideo: (id: number, data: GeneratePayload) =>
-    request.post<never, ApiResponse<GenerateTaskResponse>>(`/shot/${id}/video/generate`, data),
+  generateVideo: (id: number) =>
+    request.post<never, ApiResponse<number>>(`/shot/${id}/video/generate`),
 
-  batchGeneratePrompt: (episodeId: number, data: BatchGenerateRequest) =>
-    request.post<never, ApiResponse<BatchGenerateResponse>>(`/episode/${episodeId}/shots/batch/prompt`, data),
+  batchGeneratePrompt: (episodeId: number, _data?: BatchGenerateRequest) =>
+    request.post<never, ApiResponse<BatchGenerateResponse>>(`/episode/${episodeId}/shots/batch/prompt`),
 
-  batchGenerateImage: (episodeId: number, data: BatchGenerateRequest) =>
-    request.post<never, ApiResponse<BatchGenerateResponse>>(`/episode/${episodeId}/shots/batch/image`, data),
+  batchGenerateImage: (episodeId: number, _data?: BatchGenerateRequest) =>
+    request.post<never, ApiResponse<BatchGenerateResponse>>(`/episode/${episodeId}/shots/batch/image`),
 
-  batchGenerateVideo: (episodeId: number, data: BatchGenerateRequest) =>
-    request.post<never, ApiResponse<BatchGenerateResponse>>(`/episode/${episodeId}/shots/batch/video`, data)
+  batchGenerateVideo: (episodeId: number, _data?: BatchGenerateRequest) =>
+    request.post<never, ApiResponse<BatchGenerateResponse>>(`/episode/${episodeId}/shots/batch/video`)
 }

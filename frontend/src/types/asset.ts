@@ -9,7 +9,6 @@ export interface AssetCreateRequest {
   referenceImages?: string[]
   parentIds?: number[]
   draftContent?: string
-  stylePreset?: Record<string, any> | null
 }
 
 export interface AssetUpdateRequest {
@@ -18,7 +17,6 @@ export interface AssetUpdateRequest {
   referenceImages?: string[]
   parentIds?: number[]
   draftContent?: string
-  stylePreset?: Record<string, any> | null
 }
 
 export interface AssetVO {
@@ -30,7 +28,6 @@ export interface AssetVO {
   referenceImages: string[] | null
   parentIds?: number[]
   draftContent?: string | null
-  stylePreset: Record<string, any> | null
   status: AssetStatus
   createTime: string
   updateTime: string
@@ -40,4 +37,18 @@ export interface ShotReferenceVO {
   shotId: number
   episodeId: number
   shotStatus: number | string
+}
+
+export interface AssetDuplicateVO {
+  assetIds: number[]
+  assetNames: string[]
+  similarity: number
+}
+
+export interface AssetTreeNode {
+  id: number
+  name: string
+  assetType: AssetType | string
+  isSubAsset: boolean
+  children: AssetTreeNode[]
 }

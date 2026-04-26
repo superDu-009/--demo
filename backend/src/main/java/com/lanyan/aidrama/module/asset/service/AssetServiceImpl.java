@@ -21,14 +21,19 @@ import com.lanyan.aidrama.mapper.ShotMapper;
 import com.lanyan.aidrama.mapper.TaskMapper;
 import com.lanyan.aidrama.module.asset.dto.*;
 import com.lanyan.aidrama.module.aitask.client.DoubaoClient;
+import com.lanyan.aidrama.entity.PromptConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.FileCopyUtils;
 
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -46,6 +51,7 @@ public class AssetServiceImpl implements AssetService {
     private final ShotMapper shotMapper;
     private final EpisodeMapper episodeMapper;
     private final TaskMapper taskMapper;
+    private final com.lanyan.aidrama.mapper.PromptConfigMapper promptConfigMapper;
     private final DoubaoClient doubaoClient;
     private final ObjectMapper objectMapper;
 
@@ -83,10 +89,7 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public void updateAsset(Long id, AssetUpdateRequest req) {
-        Asset asset = assetMapper.selectById(id);
-        if (asset == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Asset asset = getOwnedAsset(id);
 
         if (req.getName() != null) asset.setName(req.getName());
         if (req.getDescription() != null) asset.setDescription(req.getDescription());
@@ -99,10 +102,7 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public void deleteAsset(Long id) {
-        Asset asset = assetMapper.selectById(id);
-        if (asset == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Asset asset = getOwnedAsset(id);
 
         // 检查是否被分镜绑定（被绑定禁止删除）
         LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
@@ -118,10 +118,7 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public void confirmAsset(Long id) {
-        Asset asset = assetMapper.selectById(id);
-        if (asset == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Asset asset = getOwnedAsset(id);
 
         // 确认前必须至少有 1 张参考图
         if (asset.getReferenceImages() == null || asset.getReferenceImages().isBlank()) {
@@ -151,6 +148,7 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public com.lanyan.aidrama.module.task.dto.TaskVO getExtractTaskStatus(Long projectId) {
+        getProjectById(projectId);
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Task::getProjectId, projectId)
                .eq(Task::getType, "asset_extract")
@@ -187,7 +185,7 @@ public class AssetServiceImpl implements AssetService {
             }
 
             // 调用 AI 提取资产
-            String systemPrompt = "你是一个资产提取助手。请从以下文本中提取所有角色(character)、场景(scene)、物品(prop)资产。返回JSON数组格式，每个对象包含：name(名称), type(character/scene/prop), description(简短描述)。只输出JSON数组，不要其他文字。";
+            String systemPrompt = buildSystemPrompt("asset_extract", "asset_extract_response.json");
             String aiResult = doubaoClient.chat(systemPrompt, episode.getContent());
 
             // 解析 AI 结果并创建资产
@@ -296,10 +294,7 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public void updateAssetRelations(Long id, String parentIds) {
-        Asset asset = assetMapper.selectById(id);
-        if (asset == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Asset asset = getOwnedAsset(id);
 
         asset.setParentIds(parentIds);
         asset.setIsSubAsset(parentIds != null && !parentIds.isBlank() ? 1 : 0);
@@ -309,10 +304,7 @@ public class AssetServiceImpl implements AssetService {
 
     @Override
     public PageResult<ShotReferenceVO> getAssetReferences(Long assetId, int page, int size) {
-        Asset asset = assetMapper.selectById(assetId);
-        if (asset == null) {
-            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
-        }
+        Asset asset = getOwnedAsset(assetId);
 
         Page<ShotAssetRef> pageParam = new Page<>(page, size);
         LambdaQueryWrapper<ShotAssetRef> refWrapper = new LambdaQueryWrapper<>();
@@ -370,6 +362,41 @@ public class AssetServiceImpl implements AssetService {
         vo.setCreateTime(asset.getCreateTime());
         vo.setUpdateTime(asset.getUpdateTime());
         return vo;
+    }
+
+    private String buildSystemPrompt(String promptKey, String templateFileName) {
+        String responseTemplate = getResponseTemplate(templateFileName);
+        LambdaQueryWrapper<PromptConfig> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(PromptConfig::getPromptKey, promptKey)
+                .eq(PromptConfig::getDeleted, 0)
+                .last("LIMIT 1");
+        PromptConfig config = promptConfigMapper.selectOne(wrapper);
+        if (config != null && config.getPromptText() != null && !config.getPromptText().isBlank()) {
+            return config.getPromptText() + "\n\n请严格按以下 JSON 模板返回，不要输出额外说明：\n" + responseTemplate;
+        }
+        return "请仅输出合法 JSON，且结构必须与以下模板完全一致：\n" + responseTemplate;
+    }
+
+    private String getResponseTemplate(String templateFileName) {
+        try {
+            ClassPathResource resource = new ClassPathResource("templates/ai/" + templateFileName);
+            try (InputStream is = resource.getInputStream()) {
+                byte[] bytes = FileCopyUtils.copyToByteArray(is);
+                return new String(bytes, StandardCharsets.UTF_8);
+            }
+        } catch (Exception e) {
+            log.warn("读取静态模板失败, file: {}", templateFileName, e);
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND.getCode(), "AI 返回模板不存在");
+        }
+    }
+
+    private Asset getOwnedAsset(Long assetId) {
+        Asset asset = assetMapper.selectById(assetId);
+        if (asset == null) {
+            throw new BusinessException(ErrorCode.RESOURCE_NOT_FOUND);
+        }
+        getProjectById(asset.getProjectId());
+        return asset;
     }
 
     private void parseAndCreateAssetsFromAI(Long projectId, String aiResult) {
