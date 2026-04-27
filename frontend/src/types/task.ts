@@ -6,7 +6,7 @@ export interface TaskVO {
   status: AiTaskStatus
   progress?: number | null
   errorMsg?: string | null
-  resultData?: Record<string, any> | null
+  resultData?: string | null
   resultUrl?: string | null
   batchId?: string | null
   createTime?: string

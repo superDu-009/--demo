@@ -88,6 +88,7 @@ watch(() => route.params.id, (id) => {
 .project-overview {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 24px;
   padding: 26px;
 
@@ -113,17 +114,42 @@ watch(() => route.params.id, (id) => {
 
 .meta-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
-  min-width: 360px;
+  grid-template-columns: repeat(3, minmax(104px, 1fr));
+  gap: 10px;
+  min-width: 340px;
+  align-self: center;
 }
 
 .meta-card {
   position: relative;
-  padding: 14px 16px;
-  border: 1px solid rgba(92, 241, 255, 0.18);
-  border-radius: 16px;
-  background: rgba(92, 241, 255, 0.055);
+  min-height: 64px;
+  padding: 11px 13px 10px;
+  overflow: hidden;
+  border: 1px solid rgba(92, 241, 255, 0.24);
+  border-radius: 10px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  background:
+    linear-gradient(145deg, rgba(92, 241, 255, 0.13), rgba(92, 241, 255, 0.035) 54%, rgba(255, 204, 102, 0.075)),
+    rgba(3, 7, 13, 0.34);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035);
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    top: 0;
+    height: 2px;
+    background: linear-gradient(90deg, $border-glow-color, rgba(125, 255, 178, 0.2));
+    opacity: 0.72;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(92, 241, 255, 0.48);
+    box-shadow: 0 0 20px rgba(92, 241, 255, 0.14);
+  }
 
   span,
   strong {
@@ -131,15 +157,17 @@ watch(() => route.params.id, (id) => {
   }
 
   span {
-    color: $text-secondary;
-    font-size: 12px;
+    color: $text-tertiary;
+    font-size: 11px;
+    letter-spacing: 0.1em;
   }
 
   strong {
-    margin-top: 6px;
+    margin-top: 5px;
     color: $text-primary;
     font-family: $font-display;
-    font-size: 18px;
+    font-size: 17px;
+    line-height: 1.05;
   }
 }
 

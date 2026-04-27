@@ -4,7 +4,6 @@
       <div>
         <p class="eyebrow">Project Dock</p>
         <h2 class="hud-title">创作舰队</h2>
-        <p>每个项目是一条生产链路，从小说解析到分镜、资产和生成任务集中调度。</p>
       </div>
       <div class="hero-stats">
         <div>
@@ -80,12 +79,12 @@
           />
         </el-form-item>
         <el-form-item label="默认比例" prop="ratio">
-          <el-select v-model="formData.ratio" class="full-width">
+          <el-select v-model="formData.ratio" class="full-width" :disabled="isEdit">
             <el-option v-for="item in PROJECT_RATIO_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
         <el-form-item label="默认清晰度" prop="definition">
-          <el-select v-model="formData.definition" class="full-width">
+          <el-select v-model="formData.definition" class="full-width" :disabled="isEdit">
             <el-option v-for="item in PROJECT_DEFINITION_OPTIONS" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
@@ -95,7 +94,7 @@
           </el-select>
         </el-form-item>
         <el-form-item v-if="formData.style === '自定义'" label="风格描述" prop="styleDesc">
-          <el-input v-model="formData.styleDesc" type="textarea" :rows="3" maxlength="300" show-word-limit />
+          <el-input v-model="formData.styleDesc" type="textarea" :rows="3" maxlength="300" show-word-limit :disabled="isEdit" />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -225,10 +224,7 @@ const handleSubmit = async () => {
     if (isEdit.value && currentEditId.value) {
       const payload: ProjectUpdateRequest = {
         name: formData.name.trim(),
-        description: formData.description?.trim(),
-        ratio: formData.ratio,
-        definition: formData.definition,
-        styleDesc: formData.style === '自定义' ? formData.styleDesc?.trim() : ''
+        description: formData.description?.trim()
       }
       await projectApi.update(currentEditId.value, payload)
       ElMessage.success('项目已更新')

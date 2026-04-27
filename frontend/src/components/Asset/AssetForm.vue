@@ -15,7 +15,7 @@
       <div class="upload-box">
         <div class="preview-list">
           <div v-for="(url, index) in form.referenceImages" :key="`${url}-${index}`" class="preview-item">
-            <img :src="url" alt="参考图" />
+            <img :src="normalizeMediaUrl(url)" alt="参考图" />
             <el-button circle size="small" type="danger" class="delete-btn" @click="removeReference(index)">×</el-button>
           </div>
         </div>
@@ -58,6 +58,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import TosUpload from '@/components/Common/TosUpload.vue'
 import { ASSET_TYPE_OPTIONS } from '@/constants/options'
 import { AssetType } from '@/types'
+import { normalizeMediaUrl } from '@/utils/media'
 import type { AssetCreateRequest, AssetUpdateRequest, AssetVO } from '@/types'
 
 const props = withDefaults(defineProps<{

@@ -44,6 +44,7 @@
 import { computed } from 'vue'
 import { AssetType, GenerationStatus } from '@/types'
 import { ASSET_STATUS_MAP, GENERATION_STATUS_MAP } from '@/constants/status'
+import { normalizeMediaUrl } from '@/utils/media'
 import type { AssetVO } from '@/types'
 
 const props = defineProps<{
@@ -61,7 +62,7 @@ defineEmits<{
 
 const statusMeta = computed(() => ASSET_STATUS_MAP[props.asset.status])
 const safeParentAssetNames = computed(() => props.parentAssetNames || [])
-const safeChildPreviewList = computed(() => props.childPreviewList || [])
+const safeChildPreviewList = computed(() => (props.childPreviewList || []).map(normalizeMediaUrl).filter(Boolean))
 const typeLabel = computed(() => {
   const map: Record<AssetType, string> = {
     character: '角色',
@@ -71,7 +72,7 @@ const typeLabel = computed(() => {
   }
   return map[props.asset.assetType]
 })
-const coverUrl = computed(() => props.asset.referenceImages?.[0] || '')
+const coverUrl = computed(() => normalizeMediaUrl(props.asset.referenceImages?.[0]))
 const generating = computed(() => props.generatingStatus === GenerationStatus.Processing)
 const generateText = computed(() => GENERATION_STATUS_MAP[props.generatingStatus ?? GenerationStatus.Pending].actionText)
 </script>

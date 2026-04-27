@@ -129,8 +129,8 @@ public class ProjectServiceImpl implements ProjectService {
         vo.setId(project.getId());
         vo.setName(project.getName());
         vo.setDescription(project.getDescription());
-        vo.setNovelOriginalTosPath(tosService.buildNovelPublicUrl(project.getNovelOriginalTosPath()));
-        vo.setNovelTosPath(tosService.buildNovelPublicUrl(project.getNovelTosPath()));
+        vo.setNovelOriginalTosPath(tosService.buildReadableUrl(project.getNovelOriginalTosPath()));
+        vo.setNovelTosPath(tosService.buildReadableUrl(project.getNovelTosPath()));
         vo.setRatio(project.getRatio());
         vo.setDefinition(project.getDefinition());
         vo.setStyle(project.getStyle());

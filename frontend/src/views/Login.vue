@@ -66,6 +66,7 @@ const handleLogin = async () => {
       status: 1,
       avatar: ''
     })
+    await authStore.fetchUserInfo().catch(() => undefined)
     ElMessage.success(`欢迎你，${res.data.nickname || res.data.username}~`)
     const redirect = (route.query.redirect as string) || '/projects'
     router.push(redirect.startsWith('/') ? redirect : '/projects')

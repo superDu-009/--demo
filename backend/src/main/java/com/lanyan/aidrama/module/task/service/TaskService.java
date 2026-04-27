@@ -12,6 +12,7 @@ import com.lanyan.aidrama.mapper.EpisodeMapper;
 import com.lanyan.aidrama.mapper.ProjectMapper;
 import com.lanyan.aidrama.mapper.ShotMapper;
 import com.lanyan.aidrama.mapper.TaskMapper;
+import com.lanyan.aidrama.module.storage.service.TosService;
 import com.lanyan.aidrama.module.task.dto.BatchTaskStatusRequest;
 import com.lanyan.aidrama.module.task.dto.TaskVO;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class TaskService {
     private final ProjectMapper projectMapper;
     private final EpisodeMapper episodeMapper;
     private final ShotMapper shotMapper;
+    private final TosService tosService;
 
     /**
      * 查询任务状态
@@ -155,7 +157,7 @@ public class TaskService {
         vo.setProgress(task.getProgress());
         vo.setErrorMsg(task.getErrorMsg());
         vo.setResultData(task.getResultData());
-        vo.setResultUrl(task.getResultUrl());
+        vo.setResultUrl(tosService.buildReadableUrl(task.getResultUrl()));
         vo.setBatchId(task.getBatchId());
         return vo;
     }

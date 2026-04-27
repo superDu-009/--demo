@@ -471,7 +471,7 @@ const openEditShotDialog = (shot: ShotVO) => {
   shotForm.promptEn = shot.promptEn || ''
   shotForm.sceneType = shot.sceneType || '中景'
   shotForm.cameraMove = shot.cameraMove || '固定镜头'
-  shotForm.lines = shot.lines || ''
+  shotForm.lines = Array.isArray(shot.lines) ? shot.lines.join('\n') : shot.lines || ''
   shotForm.duration = shot.duration || 15
   shotForm.assetIds = shot.assetRefs.map(item => item.assetId)
   shotForm.followLast = Boolean(shot.followLast)

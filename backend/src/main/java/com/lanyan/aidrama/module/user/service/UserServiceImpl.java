@@ -9,6 +9,7 @@ import com.lanyan.aidrama.mapper.SysUserMapper;
 import com.lanyan.aidrama.module.user.dto.LoginRequest;
 import com.lanyan.aidrama.module.user.dto.LoginVO;
 import com.lanyan.aidrama.module.user.dto.UserInfoVO;
+import com.lanyan.aidrama.module.storage.service.TosService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -28,6 +29,7 @@ public class UserServiceImpl implements UserService {
     private final SysUserMapper sysUserMapper;
     private final PasswordEncoder passwordEncoder;
     private final StringRedisTemplate stringRedisTemplate;
+    private final TosService tosService;
 
     /** 连续输错密码次数阈值 */
     private static final int MAX_LOGIN_FAIL_COUNT = 5;
@@ -98,7 +100,7 @@ public class UserServiceImpl implements UserService {
         vo.setId(user.getId());
         vo.setUsername(user.getUsername());
         vo.setNickname(user.getNickname());
-        vo.setAvatarUrl(user.getAvatarUrl());
+        vo.setAvatarUrl(tosService.buildReadableUrl(user.getAvatarUrl()));
         vo.setStatus(user.getStatus());
         return vo;
     }

@@ -22,9 +22,6 @@ export interface ProjectCreateRequest {
 export interface ProjectUpdateRequest {
   name?: string
   description?: string
-  ratio?: ProjectRatio
-  definition?: ProjectDefinition
-  styleDesc?: string
 }
 
 export interface ProjectVO {

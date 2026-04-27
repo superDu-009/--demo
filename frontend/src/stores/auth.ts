@@ -65,6 +65,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     storage.set('user_avatar', nextInfo.avatar || '')
     setUserInfo(nextInfo)
+    await fetchUserInfo().catch(() => undefined)
   }
 
   async function updatePassword(payload: UpdatePasswordPayload) {

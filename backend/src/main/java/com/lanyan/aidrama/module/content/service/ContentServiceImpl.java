@@ -888,9 +888,9 @@ public class ContentServiceImpl implements ContentService {
         vo.setDuration(shot.getDuration());
         vo.setSceneType(shot.getSceneType());
         vo.setCameraMove(shot.getCameraMove());
-        vo.setGeneratedImageUrl(shot.getGeneratedImageUrl());
-        vo.setGeneratedVideoUrl(shot.getGeneratedVideoUrl());
-        vo.setLastFrameUrl(shot.getLastFrameUrl());
+        vo.setGeneratedImageUrl(tosService.buildReadableUrl(shot.getGeneratedImageUrl()));
+        vo.setGeneratedVideoUrl(tosService.buildReadableUrl(shot.getGeneratedVideoUrl()));
+        vo.setLastFrameUrl(tosService.buildReadableUrl(shot.getLastFrameUrl()));
         vo.setFollowLast(shot.getFollowLast());
         vo.setDraftContent(shot.getDraftContent());
         vo.setPromptStatus(shot.getPromptStatus());
@@ -913,7 +913,7 @@ public class ContentServiceImpl implements ContentService {
                     refVO.setAssetName(asset.getName());
                     String primaryImage = extractPrimaryImage(asset);
                     if (primaryImage != null) {
-                        refVO.setPrimaryImage(primaryImage);
+                        refVO.setPrimaryImage(tosService.buildReadableUrl(primaryImage));
                     }
                 }
                 assetRefVOs.add(refVO);

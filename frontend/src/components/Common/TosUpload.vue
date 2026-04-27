@@ -36,7 +36,7 @@
     <!-- 上传成功展示 -->
     <div v-if="showPreview && fileUrl" class="preview-area card-glass">
       <!-- 图片预览 -->
-      <el-image v-if="isImageType(fileUrl)" :src="fileUrl" class="preview-image" fit="cover" />
+      <el-image v-if="isImageUrl(fileUrl)" :src="previewUrl" class="preview-image" fit="cover" />
       <!-- 文件预览 -->
       <div v-else class="preview-file">
         <el-icon :size="32" class="text-neon"><Document /></el-icon>
@@ -51,6 +51,7 @@
 import { ref, computed, watch } from 'vue'
 import { UploadFilled, Document, Delete } from '@element-plus/icons-vue'
 import { useTosUpload } from '@/composables/useTosUpload'
+import { isImageUrl, normalizeMediaUrl } from '@/utils/media'
 import type { UploadOptions } from '@/composables/useTosUpload'
 
 // 组件属性 + 默认值（withDefaults必须直接包裹defineProps）
@@ -108,6 +109,7 @@ const { uploading, progress, upload } = useTosUpload()
 const acceptStr = computed(() => {
   return props.accept && props.accept !== '*' ? props.accept : props.allowedTypes.join(',')
 })
+const previewUrl = computed(() => normalizeMediaUrl(fileUrl.value))
 
 // 监听外部传入的modelValue变化
 watch(() => props.modelValue, (val) => {
@@ -192,10 +194,6 @@ const handleDelete = () => {
   emit('update:modelValue', '')
 }
 
-// 判断是否是安全图片类型（仅允许纯位图格式，禁止SVG等可执行脚本的文件预览，防止XSS）
-const isImageType = (url: string) => {
-  return /\.(png|jpe?g|gif|webp)$/i.test(url)
-}
 </script>
 
 <style scoped lang="scss">

@@ -4,11 +4,16 @@
       <div>
         <p class="eyebrow">Asset Library</p>
         <h3 class="hud-title">资产库</h3>
-        <p>角色、场景、道具、声音统一维护，支持父子资产关系树。</p>
       </div>
       <div class="toolbar-actions">
-        <el-button @click="openExtractDialog">提取资产</el-button>
-        <vi-button color="green" radius="round" mutate @click="openCreateDialog">新建资产</vi-button>
+        <button class="hud-action ghost" type="button" @click="openExtractDialog">
+          <el-icon><Download /></el-icon>
+          <span>提取资产</span>
+        </button>
+        <button class="hud-action primary" type="button" @click="openCreateDialog">
+          <el-icon><Plus /></el-icon>
+          <span>新建资产</span>
+        </button>
       </div>
     </section>
 
@@ -85,6 +90,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Download, Plus } from '@element-plus/icons-vue'
 import AssetCard from '@/components/Asset/AssetCard.vue'
 import AssetForm from '@/components/Asset/AssetForm.vue'
 import { DUPLICATE_DECISION_OPTIONS } from '@/constants/options'
@@ -359,6 +365,71 @@ onMounted(async () => {
 .toolbar-actions {
   display: flex;
   gap: 12px;
+}
+
+.hud-action {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 40px;
+  min-width: 118px;
+  padding: 0 16px;
+  border: 1px solid rgba(92, 241, 255, 0.28);
+  border-radius: 10px;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
+  color: $text-primary;
+  background:
+    linear-gradient(110deg, rgba(92, 241, 255, 0.14), rgba(92, 241, 255, 0.03) 44%, rgba(255, 204, 102, 0.08)),
+    rgba(5, 17, 28, 0.72);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04), 0 12px 28px rgba(0, 0, 0, 0.24);
+  font-family: $font-display;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, color 0.18s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+    transform: translateX(-115%);
+    transition: transform 0.42s ease;
+  }
+
+  .el-icon {
+    font-size: 16px;
+    color: $border-glow-color;
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(92, 241, 255, 0.58);
+    box-shadow: 0 0 24px rgba(92, 241, 255, 0.2), 0 16px 38px rgba(0, 0, 0, 0.34);
+  }
+
+  &:hover::before {
+    transform: translateX(115%);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &.primary {
+    color: #031018;
+    border-color: transparent;
+    background: linear-gradient(135deg, #5cf1ff, #7dffb2 78%);
+
+    .el-icon {
+      color: #031018;
+    }
+  }
 }
 
 .filter-bar {

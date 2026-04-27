@@ -143,6 +143,8 @@ body::after {
 
 // 霓虹文字效果
 .text-neon {
+  display: inline-block;
+  padding-block: 0.04em;
   background: $primary-gradient;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -257,6 +259,144 @@ body::after {
 
 .el-button--primary {
   @extend .btn-gradient;
+}
+
+.el-button:not(.is-text):not(.is-link):not(.btn-gradient) {
+  position: relative;
+  isolation: isolate;
+  min-height: 38px;
+  padding: 0 15px;
+  overflow: hidden;
+  border: 1px solid rgba(92, 241, 255, 0.24) !important;
+  border-radius: 9px !important;
+  background:
+    linear-gradient(118deg, rgba(92, 241, 255, 0.12), rgba(92, 241, 255, 0.025) 48%, rgba(255, 204, 102, 0.07)),
+    rgba(4, 16, 27, 0.78) !important;
+  color: $text-primary !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035), 0 10px 24px rgba(0, 0, 0, 0.2) !important;
+  font-family: $font-display;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, opacity 0.18s ease !important;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+    transform: translateX(-120%);
+    transition: transform 0.4s ease;
+  }
+
+  &:hover,
+  &:focus {
+    transform: translateY(-1px);
+    border-color: rgba(92, 241, 255, 0.5) !important;
+    color: #ffffff !important;
+    box-shadow: 0 0 20px rgba(92, 241, 255, 0.15), 0 14px 34px rgba(0, 0, 0, 0.28) !important;
+  }
+
+  &:hover::before,
+  &:focus::before {
+    transform: translateX(120%);
+  }
+
+  &:active {
+    transform: translateY(0);
+  }
+
+  &.el-button--small {
+    min-height: 31px;
+    padding: 0 11px;
+    border-radius: 8px !important;
+    font-size: 12px;
+  }
+
+  &.is-circle {
+    width: 32px;
+    min-height: 32px;
+    padding: 0;
+    border-radius: 50% !important;
+    clip-path: none;
+  }
+
+  &.is-disabled,
+  &.is-disabled:hover,
+  &.is-disabled:focus {
+    transform: none;
+    cursor: not-allowed;
+    border-color: rgba(130, 158, 176, 0.16) !important;
+    background:
+      linear-gradient(118deg, rgba(92, 241, 255, 0.045), rgba(255, 255, 255, 0.018)),
+      rgba(8, 17, 25, 0.58) !important;
+    color: rgba(180, 198, 218, 0.36) !important;
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02) !important;
+    opacity: 1;
+  }
+}
+
+.el-button:not(.is-text):not(.is-link):not(.btn-gradient).el-button--danger {
+  border-color: rgba(255, 79, 216, 0.32) !important;
+  background:
+    linear-gradient(118deg, rgba(255, 79, 216, 0.15), rgba(255, 79, 216, 0.035) 48%, rgba(92, 241, 255, 0.045)),
+    rgba(24, 5, 20, 0.72) !important;
+  color: #ffe3f8 !important;
+
+  &:hover,
+  &:focus {
+    border-color: rgba(255, 79, 216, 0.58) !important;
+    box-shadow: 0 0 20px rgba(255, 79, 216, 0.16), 0 14px 34px rgba(0, 0, 0, 0.28) !important;
+  }
+}
+
+.el-button.is-text,
+.el-button.is-link {
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  color: $text-secondary !important;
+  font-family: $font-display;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  transition: color 0.18s ease, background-color 0.18s ease, transform 0.18s ease !important;
+
+  &:hover,
+  &:focus {
+    transform: translateY(-1px);
+    background: rgba(92, 241, 255, 0.08) !important;
+    color: $border-glow-color !important;
+  }
+
+  &.el-button--danger {
+    color: rgba(255, 126, 226, 0.92) !important;
+
+    &:hover,
+    &:focus {
+      background: rgba(255, 79, 216, 0.1) !important;
+      color: #ffc7f2 !important;
+    }
+  }
+}
+
+.el-button.btn-gradient {
+  border-radius: 9px !important;
+  min-height: 38px;
+  font-family: $font-display;
+
+  &.is-disabled,
+  &.is-disabled:hover,
+  &.is-disabled:focus {
+    transform: none;
+    cursor: not-allowed;
+    border: 1px solid rgba(130, 158, 176, 0.16) !important;
+    background:
+      linear-gradient(118deg, rgba(92, 241, 255, 0.08), rgba(125, 255, 178, 0.035)),
+      rgba(8, 17, 25, 0.62) !important;
+    color: rgba(180, 198, 218, 0.4) !important;
+    box-shadow: none !important;
+    opacity: 1;
+  }
 }
 
 // 弹窗（全局样式不需要:deep()，优先级更高）
@@ -405,10 +545,87 @@ body::after {
 
 // 标签
 .el-tag {
-  border-radius: 20px;
-  backdrop-filter: blur(8px);
-  background: rgba(100, 108, 255, 0.1);
-  border: none;
+  --el-tag-text-color: #{$text-primary};
+  position: relative;
+  min-height: 26px;
+  padding: 0 10px;
+  overflow: hidden;
+  border-radius: 7px;
+  border: 1px solid rgba(92, 241, 255, 0.26) !important;
+  background:
+    linear-gradient(120deg, rgba(92, 241, 255, 0.14), rgba(92, 241, 255, 0.035)),
+    rgba(3, 12, 20, 0.72) !important;
+  color: $text-primary !important;
+  backdrop-filter: blur(10px);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.035), 0 0 14px rgba(92, 241, 255, 0.1);
+  font-family: $font-display;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
+  &::before {
+    content: '';
+    width: 5px;
+    height: 5px;
+    margin-right: 7px;
+    border-radius: 50%;
+    background: $border-glow-color;
+    box-shadow: 0 0 10px rgba(92, 241, 255, 0.75);
+  }
+
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(92, 241, 255, 0.52) !important;
+    box-shadow: 0 0 22px rgba(92, 241, 255, 0.17);
+  }
+}
+
+.el-tag.el-tag--success {
+  border-color: rgba(125, 255, 178, 0.42) !important;
+  background:
+    linear-gradient(120deg, rgba(125, 255, 178, 0.18), rgba(92, 241, 255, 0.05)),
+    rgba(3, 18, 18, 0.74) !important;
+  color: #dfffee !important;
+
+  &::before {
+    background: $accent-green;
+    box-shadow: 0 0 12px rgba(125, 255, 178, 0.86);
+  }
+}
+
+.el-tag.el-tag--warning {
+  border-color: rgba(255, 204, 102, 0.42) !important;
+  background:
+    linear-gradient(120deg, rgba(255, 204, 102, 0.18), rgba(92, 241, 255, 0.04)),
+    rgba(22, 16, 4, 0.72) !important;
+  color: #fff2c8 !important;
+
+  &::before {
+    background: $accent-yellow;
+    box-shadow: 0 0 12px rgba(255, 204, 102, 0.84);
+  }
+}
+
+.el-tag.el-tag--danger {
+  border-color: rgba(255, 79, 216, 0.42) !important;
+  background:
+    linear-gradient(120deg, rgba(255, 79, 216, 0.18), rgba(92, 241, 255, 0.035)),
+    rgba(24, 5, 20, 0.74) !important;
+  color: #ffe3f8 !important;
+
+  &::before {
+    background: $accent-pink;
+    box-shadow: 0 0 12px rgba(255, 79, 216, 0.84);
+  }
+}
+
+.el-tag.el-tag--info {
+  border-color: rgba(180, 198, 218, 0.24) !important;
+  background:
+    linear-gradient(120deg, rgba(180, 198, 218, 0.11), rgba(92, 241, 255, 0.035)),
+    rgba(8, 15, 24, 0.72) !important;
+  color: $text-secondary !important;
 }
 
 // 消息提示

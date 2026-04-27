@@ -23,6 +23,9 @@ import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignReques
 import software.amazon.awssdk.core.sync.RequestBody;
 
 import java.nio.charset.StandardCharsets;
+import java.net.URI;
+import java.net.URL;
+import java.net.URLDecoder;
 import java.time.Duration;
 
 /**
@@ -174,6 +177,17 @@ public class TosService {
         return "https://" + tosConfig.getBucket() + "." + tosConfig.getEndpointHost().replace("tos-s3-", "tos-") + "/" + fileKey;
     }
 
+    public String buildReadableUrl(String fileKeyOrUrl) {
+        if (fileKeyOrUrl == null || fileKeyOrUrl.isBlank()) {
+            return fileKeyOrUrl;
+        }
+        String fileKey = extractTosFileKey(fileKeyOrUrl);
+        if (fileKey == null || fileKey.isBlank()) {
+            return fileKeyOrUrl;
+        }
+        return presignGetUrl(fileKey);
+    }
+
     /**
      * 构建小说文件的完整公网访问URL（预签名下载URL）
      * 有效期1小时，返回的 URL 可直接在浏览器中打开下载/预览
@@ -182,12 +196,10 @@ public class TosService {
         if (fileKey == null || fileKey.isBlank()) {
             return fileKey;
         }
-        // 如果已经是完整URL则直接返回
-        if (fileKey.startsWith("http://") || fileKey.startsWith("https://")) {
-            return fileKey;
-        }
+        return buildReadableUrl(fileKey);
+    }
 
-        // 使用 S3 预签名生成 GET 下载 URL
+    private String presignGetUrl(String fileKey) {
         S3Presigner presigner = S3Presigner.builder()
                 .endpointOverride(tosConfig.getEndpointUri())
                 .region(Region.of(tosConfig.getRegion()))
@@ -205,6 +217,49 @@ public class TosService {
 
         PresignedGetObjectRequest presignedRequest = presigner.presignGetObject(presignRequest);
         return presignedRequest.url().toString();
+    }
+
+    private String extractTosFileKey(String fileKeyOrUrl) {
+        String trimmed = fileKeyOrUrl.trim();
+        if (!trimmed.startsWith("http://") && !trimmed.startsWith("https://")) {
+            return trimmed;
+        }
+        try {
+            URI uri = URI.create(trimmed);
+            String host = uri.getHost();
+            if (host == null || !isTosHost(host)) {
+                return null;
+            }
+            String path = uri.getRawPath();
+            if (path == null || path.length() <= 1) {
+                return null;
+            }
+            return URLDecoder.decode(path.substring(1), StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            try {
+                URL url = new URL(trimmed);
+                String host = url.getHost();
+                if (host == null || !isTosHost(host)) {
+                    return null;
+                }
+                String path = url.getPath();
+                if (path == null || path.length() <= 1) {
+                    return null;
+                }
+                return URLDecoder.decode(path.substring(1), StandardCharsets.UTF_8);
+            } catch (Exception fallbackError) {
+                log.warn("解析 TOS URL 失败: {}", fileKeyOrUrl);
+                return null;
+            }
+        }
+    }
+
+    private boolean isTosHost(String host) {
+        String bucket = tosConfig.getBucket();
+        if (bucket == null || bucket.isBlank()) {
+            return false;
+        }
+        return host.startsWith(bucket + ".") && host.contains("tos");
     }
 
     private S3Client buildS3Client() {

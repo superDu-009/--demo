@@ -24,6 +24,8 @@ import com.lanyan.aidrama.module.aitask.client.DoubaoClient;
 import com.lanyan.aidrama.entity.PromptConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.lanyan.aidrama.module.storage.service.TosService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
@@ -54,6 +56,7 @@ public class AssetServiceImpl implements AssetService {
     private final com.lanyan.aidrama.mapper.PromptConfigMapper promptConfigMapper;
     private final DoubaoClient doubaoClient;
     private final ObjectMapper objectMapper;
+    private final TosService tosService;
 
     @Override
     public List<AssetVO> listAssets(Long projectId, String assetType) {
@@ -355,7 +358,7 @@ public class AssetServiceImpl implements AssetService {
         vo.setAssetType(asset.getAssetType());
         vo.setName(asset.getName());
         vo.setDescription(asset.getDescription());
-        vo.setReferenceImages(asset.getReferenceImages());
+        vo.setReferenceImages(buildReadableReferenceImages(asset.getReferenceImages()));
         vo.setParentIds(asset.getParentIds());
         vo.setIsSubAsset(asset.getIsSubAsset());
         vo.setStatus(asset.getStatus());
@@ -375,6 +378,23 @@ public class AssetServiceImpl implements AssetService {
             return config.getPromptText() + "\n\n请严格按以下 JSON 模板返回，不要输出额外说明：\n" + responseTemplate;
         }
         return "请仅输出合法 JSON，且结构必须与以下模板完全一致：\n" + responseTemplate;
+    }
+
+    private String buildReadableReferenceImages(String referenceImages) {
+        if (referenceImages == null || referenceImages.isBlank()) {
+            return referenceImages;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(referenceImages);
+            if (node.isArray()) {
+                ArrayNode result = objectMapper.createArrayNode();
+                node.forEach(item -> result.add(tosService.buildReadableUrl(item.asText())));
+                return objectMapper.writeValueAsString(result);
+            }
+        } catch (Exception ignored) {
+            // 兼容历史单 URL 存储。
+        }
+        return tosService.buildReadableUrl(referenceImages);
     }
 
     private String getResponseTemplate(String templateFileName) {

@@ -30,12 +30,11 @@
         <div>
           <p class="hud-kicker page-kicker">Production Matrix</p>
           <h1 class="page-title hud-title text-neon">{{ pageTitle }}</h1>
-          <p class="page-subtitle">{{ pageSubtitle }}</p>
         </div>
 
         <el-dropdown trigger="click">
           <div class="user-entry">
-            <el-avatar :size="38" :src="authStore.userInfo?.avatar || undefined">
+            <el-avatar :size="38" :src="avatarSrc || undefined">
               {{ authStore.displayName.charAt(0) }}
             </el-avatar>
             <div>
@@ -45,7 +44,7 @@
           </div>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item @click="profileDialogVisible = true">个人中心</el-dropdown-item>
+              <el-dropdown-item @click="openProfileDialog">个人中心</el-dropdown-item>
               <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
@@ -61,7 +60,7 @@
       <el-form ref="profileFormRef" :model="profileForm" :rules="profileRules" label-width="84px">
         <el-form-item label="头像">
           <div class="avatar-field">
-            <el-avatar :size="64" :src="profileForm.avatar || undefined">
+            <el-avatar :size="64" :src="profileAvatarSrc || undefined">
               {{ (profileForm.username || authStore.displayName).charAt(0) }}
             </el-avatar>
             <TosUpload
@@ -124,6 +123,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { Collection, Film, Picture, SwitchButton, VideoPlay } from '@element-plus/icons-vue'
 import TosUpload from '@/components/Common/TosUpload.vue'
 import { AUTH_EXPIRED_EVENT } from '@/utils/auth-events'
+import { normalizeMediaUrl } from '@/utils/media'
 import { useAuthStore } from '@/stores/auth'
 import { userApi } from '@/api/user'
 
@@ -150,10 +150,8 @@ const pageTitle = computed(() => {
   return item?.title || 'AI漫剧生产平台'
 })
 
-const pageSubtitle = computed(() => {
-  if (route.name === 'ProjectList') return '上传小说、设置全局参数，并进入项目详情。'
-  return '严格按 PRD 保留三段式主流程：剧本预览、分镜工作台、资产库。'
-})
+const avatarSrc = computed(() => normalizeMediaUrl(authStore.userInfo?.avatar || authStore.userInfo?.avatarUrl))
+const profileAvatarSrc = computed(() => normalizeMediaUrl(profileForm.avatar))
 
 const profileForm = reactive({
   username: '',
@@ -191,9 +189,15 @@ const handleMenuClick = (item: { name: string; requiresProject: boolean }) => {
 
 const fillProfileForm = () => {
   profileForm.username = authStore.userInfo?.username || ''
-  profileForm.avatar = authStore.userInfo?.avatar || ''
+  profileForm.avatar = authStore.userInfo?.avatar || authStore.userInfo?.avatarUrl || ''
   profileForm.oldPassword = ''
   profileForm.newPassword = ''
+}
+
+const openProfileDialog = async () => {
+  await authStore.fetchUserInfo().catch(() => undefined)
+  fillProfileForm()
+  profileDialogVisible.value = true
 }
 
 const submitProfile = async () => {
@@ -237,6 +241,7 @@ const submitExpiredLogin = async () => {
       status: 1,
       avatar: authStore.userInfo?.avatar || ''
     })
+    await authStore.fetchUserInfo().catch(() => undefined)
     loginDialogVisible.value = false
     loginForm.password = ''
     ElMessage.success(`欢迎你，${res.data.nickname || res.data.username}~`)
@@ -252,7 +257,7 @@ const handleAuthExpired = () => {
 }
 
 onMounted(async () => {
-  if (!authStore.userInfo && authStore.token) {
+  if (authStore.token) {
     await authStore.fetchUserInfo().catch(() => undefined)
   }
   fillProfileForm()
@@ -389,7 +394,8 @@ onBeforeUnmount(() => {
 .page-title {
   margin: 0;
   font-size: 28px;
-  line-height: 1;
+  line-height: 1.24;
+  padding: 2px 0 3px;
 }
 
 .page-subtitle {
@@ -410,12 +416,20 @@ onBeforeUnmount(() => {
   cursor: pointer;
   color: $text-primary;
 
+  .el-avatar {
+    flex: 0 0 auto;
+    width: var(--el-avatar-size) !important;
+    height: var(--el-avatar-size) !important;
+    aspect-ratio: 1;
+    border-radius: 50% !important;
+  }
+
   strong,
-  span {
+  > div span {
     display: block;
   }
 
-  span {
+  > div span {
     margin-top: 4px;
     font-size: 12px;
     color: $text-secondary;
@@ -426,6 +440,14 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 16px;
+
+  .el-avatar {
+    flex: 0 0 auto;
+    width: var(--el-avatar-size) !important;
+    height: var(--el-avatar-size) !important;
+    aspect-ratio: 1;
+    border-radius: 50% !important;
+  }
 }
 
 @media (max-width: 900px) {

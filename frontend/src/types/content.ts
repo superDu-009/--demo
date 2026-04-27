@@ -50,7 +50,7 @@ export interface ShotVO {
   lastFrameUrl?: string | null
   sceneType?: string | null
   cameraMove?: string | null
-  lines?: string | null
+  lines?: string[] | string | null
   duration?: number | null
   followLast?: number | boolean | null
   draftContent?: string | null
@@ -71,7 +71,7 @@ export interface ShotCreateRequest {
   promptEn?: string
   sceneType?: string | null
   cameraMove?: string | null
-  lines?: string | null
+  lines?: string[] | string | null
   duration?: number | null
   followLast?: boolean
   draftContent?: string | null

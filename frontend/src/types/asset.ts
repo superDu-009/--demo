@@ -36,7 +36,7 @@ export interface AssetVO {
 export interface ShotReferenceVO {
   shotId: number
   episodeId: number
-  shotStatus: number | string
+  createTime?: string
 }
 
 export interface AssetDuplicateVO {

@@ -12,8 +12,18 @@ import type {
   ShotVO
 } from '@/types'
 
+const normalizeLines = (lines: ShotCreateRequest['lines'] | string | null | undefined) => {
+  if (Array.isArray(lines)) return lines
+  if (typeof lines !== 'string') return lines
+  return lines
+    .split(/\n+/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
 const normalizeShotPayload = (data: ShotCreateRequest | ShotUpdateRequest) => ({
   ...data,
+  lines: normalizeLines(data.lines as ShotCreateRequest['lines'] | string | null | undefined),
   followLast: typeof data.followLast === 'boolean' ? Number(data.followLast) : data.followLast
 })
 
