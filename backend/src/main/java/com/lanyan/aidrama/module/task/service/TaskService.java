@@ -4,6 +4,7 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
+import com.lanyan.aidrama.common.TaskStatus;
 import com.lanyan.aidrama.entity.Episode;
 import com.lanyan.aidrama.entity.Project;
 import com.lanyan.aidrama.entity.Shot;
@@ -73,7 +74,7 @@ public class TaskService {
      */
     public List<Task> getPollableTasks() {
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Task::getStatus, 1)
+        wrapper.eq(Task::getStatus, TaskStatus.PROCESSING.getCode())
                .le(Task::getNextPollTime, java.time.LocalDateTime.now())
                .orderByAsc(Task::getNextPollTime)
                .last("LIMIT 50");
@@ -87,7 +88,7 @@ public class TaskService {
         if (task.getPollCount() == null) task.setPollCount(0);
         if (task.getPollCount() >= 30) {
             log.warn("任务轮询超时, taskId: {}", task.getId());
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg("任务轮询超时");
             task.setNextPollTime(null);
             taskMapper.updateById(task);
@@ -109,7 +110,7 @@ public class TaskService {
     }
 
     public void markTaskPolling(Task task) {
-        task.setStatus(1);
+        task.setStatus(TaskStatus.PROCESSING.getCode());
         task.setNextPollTime(java.time.LocalDateTime.now().plusSeconds(5));
         task.setLastPollTime(java.time.LocalDateTime.now());
         taskMapper.updateById(task);

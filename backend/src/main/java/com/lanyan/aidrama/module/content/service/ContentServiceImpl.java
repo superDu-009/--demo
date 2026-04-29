@@ -2,8 +2,12 @@ package com.lanyan.aidrama.module.content.service;
 
 import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.lanyan.aidrama.common.AssetStatus;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
+import com.lanyan.aidrama.common.ShotStatus;
+import com.lanyan.aidrama.common.TaskStatus;
+import com.lanyan.aidrama.common.TaskType;
 import com.lanyan.aidrama.entity.*;
 import com.lanyan.aidrama.mapper.*;
 import com.lanyan.aidrama.module.aitask.client.DoubaoClient;
@@ -72,9 +76,9 @@ public class ContentServiceImpl implements ContentService {
 
         // 创建 task 记录
         Task task = new Task();
-        task.setType("script_analyze");
+        task.setType(TaskType.SCRIPT_ANALYZE.getCode());
         task.setProjectId(projectId);
-        task.setStatus(0);
+        task.setStatus(TaskStatus.PENDING.getCode());
         task.setPollCount(0);
         taskMapper.insert(task);
 
@@ -90,7 +94,7 @@ public class ContentServiceImpl implements ContentService {
         // 查找该项目最新的剧本分析任务
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Task::getProjectId, projectId)
-               .eq(Task::getType, "script_analyze")
+               .eq(Task::getType, TaskType.SCRIPT_ANALYZE.getCode())
                .orderByDesc(Task::getId)
                .last("LIMIT 1");
         Task task = taskMapper.selectOne(wrapper);
@@ -104,10 +108,10 @@ public class ContentServiceImpl implements ContentService {
         vo.setTaskId(task.getId());
         // 根据 task 状态映射到解析状态
         vo.setParseStatus(switch (task.getStatus()) {
-            case 0 -> "analyzing";
-            case 1 -> "analyzing";
-            case 2 -> "success";
-            case 3 -> "failed";
+            case TaskStatus.PENDING_CODE -> "analyzing";
+            case TaskStatus.PROCESSING_CODE -> "analyzing";
+            case TaskStatus.SUCCESS_CODE -> "success";
+            case TaskStatus.FAILED_CODE -> "failed";
             default -> "pending";
         });
         vo.setParseError(task.getErrorMsg());
@@ -121,7 +125,7 @@ public class ContentServiceImpl implements ContentService {
 
         try {
             // 更新为处理中
-            task.setStatus(1);
+            task.setStatus(TaskStatus.PROCESSING.getCode());
             taskMapper.updateById(task);
 
             Project project = getProjectById(projectId);
@@ -133,13 +137,13 @@ public class ContentServiceImpl implements ContentService {
             replaceEpisodesFromAiResult(projectId, aiResult);
 
             // 更新 task 状态为成功
-            task.setStatus(2);
+            task.setStatus(TaskStatus.SUCCESS.getCode());
             task.setResultData(aiResult);
             taskMapper.updateById(task);
 
         } catch (Exception e) {
             log.error("剧本分析失败, projectId: {}", projectId, e);
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg(e.getMessage());
             taskMapper.updateById(task);
         }
@@ -162,7 +166,7 @@ public class ContentServiceImpl implements ContentService {
         episode.setTitle(req.getTitle());
         episode.setContent(req.getContent());
         episode.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
-        episode.setParseStatus("success");
+        episode.setParseStatus(ShotStatus.SUCCESS.getCode());
 
         episodeMapper.insert(episode);
         log.info("创建分集成功, episodeId: {}", episode.getId());
@@ -244,10 +248,10 @@ public class ContentServiceImpl implements ContentService {
         }
 
         Task task = new Task();
-        task.setType("shot_split");
+        task.setType(TaskType.SHOT_SPLIT.getCode());
         task.setProjectId(episode.getProjectId());
         task.setEpisodeId(episodeId);
-        task.setStatus(0);
+        task.setStatus(TaskStatus.PENDING.getCode());
         task.setPollCount(0);
         taskMapper.insert(task);
 
@@ -261,11 +265,11 @@ public class ContentServiceImpl implements ContentService {
         if (task == null) return;
 
         try {
-            task.setStatus(1);
+            task.setStatus(TaskStatus.PROCESSING.getCode());
             taskMapper.updateById(task);
 
             // 获取 prompt 并替换时长变量
-            String promptText = buildSystemPrompt("shot_split", "shot_split_response.json")
+            String promptText = buildSystemPrompt(TaskType.SHOT_SPLIT.getCode(), "shot_split_response.json")
                     .replace("{duration}", String.valueOf(duration));
 
             Episode episode = episodeMapper.selectById(episodeId);
@@ -276,13 +280,13 @@ public class ContentServiceImpl implements ContentService {
             // 解析 AI 返回的 JSON，写入 shot 表
             parseAndCreateShots(episodeId, aiResult);
 
-            task.setStatus(2);
+            task.setStatus(TaskStatus.SUCCESS.getCode());
             task.setResultData(aiResult);
             taskMapper.updateById(task);
 
         } catch (Exception e) {
             log.error("分镜拆分失败, episodeId: {}", episodeId, e);
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg(e.getMessage());
             taskMapper.updateById(task);
         }
@@ -308,9 +312,9 @@ public class ContentServiceImpl implements ContentService {
         shot.setLines(req.getLines() != null ? toJsonString(req.getLines()) : null);
         shot.setSortOrder(req.getSortOrder() != null ? req.getSortOrder() : sortOrder);
         shot.setFollowLast(req.getFollowLast() != null ? req.getFollowLast() : 1);
-        shot.setPromptStatus("pending");
-        shot.setImageStatus("pending");
-        shot.setVideoStatus("pending");
+        shot.setPromptStatus(ShotStatus.PENDING.getCode());
+        shot.setImageStatus(ShotStatus.PENDING.getCode());
+        shot.setVideoStatus(ShotStatus.PENDING.getCode());
 
         shotMapper.insert(shot);
 
@@ -384,12 +388,12 @@ public class ContentServiceImpl implements ContentService {
         Shot shot = getOwnedShot(id);
 
         Task task = new Task();
-        task.setType("prompt_gen");
+        task.setType(TaskType.PROMPT_GEN.getCode());
         task.setShotId(id);
         // 通过 episode 找 projectId
         Episode episode = episodeMapper.selectById(shot.getEpisodeId());
         if (episode != null) task.setProjectId(episode.getProjectId());
-        task.setStatus(0);
+        task.setStatus(TaskStatus.PENDING.getCode());
         task.setPollCount(0);
         taskMapper.insert(task);
 
@@ -403,35 +407,35 @@ public class ContentServiceImpl implements ContentService {
         if (task == null) return;
 
         try {
-            task.setStatus(1);
+            task.setStatus(TaskStatus.PROCESSING.getCode());
             taskMapper.updateById(task);
 
             Shot shot = shotMapper.selectById(shotId);
-            shot.setPromptStatus("generating");
+            shot.setPromptStatus(ShotStatus.GENERATING.getCode());
             shotMapper.updateById(shot);
-            String promptText = getPromptText("prompt_gen");
+            String promptText = getPromptText(TaskType.PROMPT_GEN.getCode());
 
             // 调用 AI 生成英文提示词
             String promptEn = doubaoClient.chat(promptText, shot.getPrompt());
 
             // 翻译 prompt
             shot.setPromptEn(promptEn);
-            shot.setPromptStatus("success");
+            shot.setPromptStatus(ShotStatus.SUCCESS.getCode());
             shotMapper.updateById(shot);
 
-            task.setStatus(2);
+            task.setStatus(TaskStatus.SUCCESS.getCode());
             task.setResultData(promptEn);
             taskMapper.updateById(task);
 
         } catch (Exception e) {
             log.error("提示词生成失败, shotId: {}", shotId, e);
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg(e.getMessage());
             taskMapper.updateById(task);
 
             Shot shot = shotMapper.selectById(shotId);
             if (shot != null) {
-                shot.setPromptStatus("failed");
+                shot.setPromptStatus(ShotStatus.FAILED.getCode());
                 shot.setErrorMsg(e.getMessage());
                 shotMapper.updateById(shot);
             }
@@ -450,11 +454,11 @@ public class ContentServiceImpl implements ContentService {
         }
 
         Task task = new Task();
-        task.setType("image_gen");
+        task.setType(TaskType.IMAGE_GEN.getCode());
         task.setShotId(id);
         Episode episode = episodeMapper.selectById(shot.getEpisodeId());
         if (episode != null) task.setProjectId(episode.getProjectId());
-        task.setStatus(0);
+        task.setStatus(TaskStatus.PENDING.getCode());
         task.setPollCount(0);
         taskMapper.insert(task);
 
@@ -472,11 +476,11 @@ public class ContentServiceImpl implements ContentService {
         if (task == null) return;
 
         try {
-            task.setStatus(1);
+            task.setStatus(TaskStatus.PROCESSING.getCode());
             taskMapper.updateById(task);
 
             Shot shot = shotMapper.selectById(shotId);
-            shot.setImageStatus("generating");
+            shot.setImageStatus(ShotStatus.GENERATING.getCode());
             shotMapper.updateById(shot);
             List<String> refImages = getAssetReferenceImages(shotId, true);
 
@@ -484,17 +488,17 @@ public class ContentServiceImpl implements ContentService {
             List<String> imageUrls = imageGenClient.generateImage(shot.getPromptEn(), refImages);
 
             if (imageUrls.isEmpty()) {
-                task.setStatus(3);
+                task.setStatus(TaskStatus.FAILED.getCode());
                 task.setErrorMsg("AI 生成图片为空");
-                shot.setImageStatus("failed");
+                shot.setImageStatus(ShotStatus.FAILED.getCode());
                 shot.setErrorMsg("AI 生成图片为空");
             } else {
                 // TODO: 下载图片上传到 TOS，回写 URL
                 // 简化处理：先直接用返回的 URL
                 String imageUrl = imageUrls.get(0);
                 shot.setGeneratedImageUrl(imageUrl);
-                shot.setImageStatus("success");
-                task.setStatus(2);
+                shot.setImageStatus(ShotStatus.SUCCESS.getCode());
+                task.setStatus(TaskStatus.SUCCESS.getCode());
                 task.setResultUrl(imageUrl);
             }
 
@@ -503,13 +507,13 @@ public class ContentServiceImpl implements ContentService {
 
         } catch (Exception e) {
             log.error("图片生成失败, shotId: {}", shotId, e);
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg("图片生成失败: " + e.getMessage());
             taskMapper.updateById(task);
 
             Shot shot = shotMapper.selectById(shotId);
             if (shot != null) {
-                shot.setImageStatus("failed");
+                shot.setImageStatus(ShotStatus.FAILED.getCode());
                 shot.setErrorMsg("图片生成失败: " + e.getMessage());
                 shotMapper.updateById(shot);
             }
@@ -528,11 +532,11 @@ public class ContentServiceImpl implements ContentService {
         }
 
         Task task = new Task();
-        task.setType("video_gen");
+        task.setType(TaskType.VIDEO_GEN.getCode());
         task.setShotId(id);
         Episode episode = episodeMapper.selectById(shot.getEpisodeId());
         if (episode != null) task.setProjectId(episode.getProjectId());
-        task.setStatus(0);
+        task.setStatus(TaskStatus.PENDING.getCode());
         task.setPollCount(0);
         taskMapper.insert(task);
 
@@ -549,11 +553,11 @@ public class ContentServiceImpl implements ContentService {
         if (task == null) return;
 
         try {
-            task.setStatus(1);
+            task.setStatus(TaskStatus.PROCESSING.getCode());
             taskMapper.updateById(task);
 
             Shot shot = shotMapper.selectById(shotId);
-            shot.setVideoStatus("generating");
+            shot.setVideoStatus(ShotStatus.GENERATING.getCode());
             shotMapper.updateById(shot);
             List<String> refImages = getAssetReferenceImages(shotId, true);
 
@@ -580,13 +584,13 @@ public class ContentServiceImpl implements ContentService {
 
         } catch (Exception e) {
             log.error("视频生成提交失败, shotId: {}", shotId, e);
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg("视频生成失败: " + e.getMessage());
             taskMapper.updateById(task);
 
             Shot shot = shotMapper.selectById(shotId);
             if (shot != null) {
-                shot.setVideoStatus("failed");
+                shot.setVideoStatus(ShotStatus.FAILED.getCode());
                 shot.setErrorMsg("视频生成失败: " + e.getMessage());
                 shotMapper.updateById(shot);
             }
@@ -604,13 +608,13 @@ public class ContentServiceImpl implements ContentService {
         for (Shot shot : shots) {
             if (shot.getPrompt() == null) continue;
             Task task = new Task();
-            task.setType("prompt_gen");
+            task.setType(TaskType.PROMPT_GEN.getCode());
             task.setShotId(shot.getId());
             task.setEpisodeId(episodeId);
             Episode ep = episodeMapper.selectById(episodeId);
             if (ep != null) task.setProjectId(ep.getProjectId());
             task.setBatchId(batchId);
-            task.setStatus(0);
+            task.setStatus(TaskStatus.PENDING.getCode());
             task.setPollCount(0);
             taskMapper.insert(task);
             taskIds.add(task.getId());
@@ -632,13 +636,13 @@ public class ContentServiceImpl implements ContentService {
         for (Shot shot : shots) {
             if (shot.getPromptEn() == null || shot.getPromptEn().isBlank()) continue;
             Task task = new Task();
-            task.setType("image_gen");
+            task.setType(TaskType.IMAGE_GEN.getCode());
             task.setShotId(shot.getId());
             task.setEpisodeId(episodeId);
             Episode ep = episodeMapper.selectById(episodeId);
             if (ep != null) task.setProjectId(ep.getProjectId());
             task.setBatchId(batchId);
-            task.setStatus(0);
+            task.setStatus(TaskStatus.PENDING.getCode());
             task.setPollCount(0);
             taskMapper.insert(task);
             taskIds.add(task.getId());
@@ -660,13 +664,13 @@ public class ContentServiceImpl implements ContentService {
         for (Shot shot : shots) {
             if (shot.getPromptEn() == null || shot.getPromptEn().isBlank()) continue;
             Task task = new Task();
-            task.setType("video_gen");
+            task.setType(TaskType.VIDEO_GEN.getCode());
             task.setShotId(shot.getId());
             task.setEpisodeId(episodeId);
             Episode ep = episodeMapper.selectById(episodeId);
             if (ep != null) task.setProjectId(ep.getProjectId());
             task.setBatchId(batchId);
-            task.setStatus(0);
+            task.setStatus(TaskStatus.PENDING.getCode());
             task.setPollCount(0);
             taskMapper.insert(task);
             taskIds.add(task.getId());
@@ -763,9 +767,9 @@ public class ContentServiceImpl implements ContentService {
                     shot.setCameraMove(node.has("cameraMove") ? node.get("cameraMove").asText() : null);
                     shot.setSortOrder(sortOrder++);
                     shot.setFollowLast(1);
-                    shot.setPromptStatus("pending");
-                    shot.setImageStatus("pending");
-                    shot.setVideoStatus("pending");
+                    shot.setPromptStatus(ShotStatus.PENDING.getCode());
+                    shot.setImageStatus(ShotStatus.PENDING.getCode());
+                    shot.setVideoStatus(ShotStatus.PENDING.getCode());
                     shotMapper.insert(shot);
                 }
             }
@@ -804,7 +808,7 @@ public class ContentServiceImpl implements ContentService {
                 episode.setSummary(node.hasNonNull("summary") ? node.get("summary").asText() : null);
                 episode.setContent(node.hasNonNull("content") ? node.get("content").asText() : "");
                 episode.setSortOrder(sortOrder++);
-                episode.setParseStatus("success");
+                episode.setParseStatus(ShotStatus.SUCCESS.getCode());
                 episodeMapper.insert(episode);
             }
         } catch (BusinessException e) {
@@ -825,7 +829,7 @@ public class ContentServiceImpl implements ContentService {
             if (!Objects.equals(asset.getProjectId(), shotProjectId)) {
                 throw new BusinessException(ErrorCode.FORBIDDEN);
             }
-            if (!"confirmed".equals(asset.getStatus())) {
+            if (!AssetStatus.CONFIRMED.getCode().equals(asset.getStatus())) {
                 throw new BusinessException(40900, "仅已确认资产可被分镜绑定");
             }
             if (extractPrimaryImage(asset) == null) {

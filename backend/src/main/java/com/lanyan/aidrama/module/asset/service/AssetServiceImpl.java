@@ -4,9 +4,12 @@ import cn.dev33.satoken.stp.StpUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.lanyan.aidrama.common.AssetStatus;
 import com.lanyan.aidrama.common.BusinessException;
 import com.lanyan.aidrama.common.ErrorCode;
 import com.lanyan.aidrama.common.PageResult;
+import com.lanyan.aidrama.common.TaskStatus;
+import com.lanyan.aidrama.common.TaskType;
 import com.lanyan.aidrama.entity.Asset;
 import com.lanyan.aidrama.entity.Episode;
 import com.lanyan.aidrama.entity.Project;
@@ -83,7 +86,7 @@ public class AssetServiceImpl implements AssetService {
         asset.setDescription(req.getDescription());
         asset.setReferenceImages(req.getReferenceImages());
         asset.setParentIds(req.getParentIds());
-        asset.setStatus("draft");
+        asset.setStatus(AssetStatus.DRAFT.getCode());
 
         assetMapper.insert(asset);
         log.info("创建资产成功, assetId: {}", asset.getId());
@@ -128,7 +131,7 @@ public class AssetServiceImpl implements AssetService {
             throw new BusinessException(40900, "资产必须至少有 1 张参考图才能确认");
         }
 
-        asset.setStatus("confirmed");
+        asset.setStatus(AssetStatus.CONFIRMED.getCode());
         assetMapper.updateById(asset);
         log.info("确认资产成功, assetId: {}", id);
     }
@@ -138,10 +141,10 @@ public class AssetServiceImpl implements AssetService {
         getProjectById(projectId);
 
         Task task = new Task();
-        task.setType("asset_extract");
+        task.setType(TaskType.ASSET_EXTRACT.getCode());
         task.setProjectId(projectId);
         task.setEpisodeId(episodeId);
-        task.setStatus(0);
+        task.setStatus(TaskStatus.PENDING.getCode());
         task.setPollCount(0);
         taskMapper.insert(task);
 
@@ -154,7 +157,7 @@ public class AssetServiceImpl implements AssetService {
         getProjectById(projectId);
         LambdaQueryWrapper<Task> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Task::getProjectId, projectId)
-               .eq(Task::getType, "asset_extract")
+               .eq(Task::getType, TaskType.ASSET_EXTRACT.getCode())
                .orderByDesc(Task::getId)
                .last("LIMIT 1");
         Task task = taskMapper.selectOne(wrapper);
@@ -179,7 +182,7 @@ public class AssetServiceImpl implements AssetService {
         if (task == null) return;
 
         try {
-            task.setStatus(1);
+            task.setStatus(TaskStatus.PROCESSING.getCode());
             taskMapper.updateById(task);
 
             Episode episode = episodeMapper.selectById(episodeId);
@@ -188,19 +191,19 @@ public class AssetServiceImpl implements AssetService {
             }
 
             // 调用 AI 提取资产
-            String systemPrompt = buildSystemPrompt("asset_extract", "asset_extract_response.json");
+            String systemPrompt = buildSystemPrompt(TaskType.ASSET_EXTRACT.getCode(), "asset_extract_response.json");
             String aiResult = doubaoClient.chat(systemPrompt, episode.getContent());
 
             // 解析 AI 结果并创建资产
             parseAndCreateAssetsFromAI(episode.getProjectId(), aiResult);
 
-            task.setStatus(2);
+            task.setStatus(TaskStatus.SUCCESS.getCode());
             task.setResultData(aiResult);
             taskMapper.updateById(task);
 
         } catch (Exception e) {
             log.error("资产提取失败, episodeId: {}", episodeId, e);
-            task.setStatus(3);
+            task.setStatus(TaskStatus.FAILED.getCode());
             task.setErrorMsg(e.getMessage());
             taskMapper.updateById(task);
         }
@@ -429,7 +432,7 @@ public class AssetServiceImpl implements AssetService {
                     asset.setName(node.has("name") ? node.get("name").asText() : "未命名");
                     asset.setAssetType(node.has("type") ? node.get("type").asText() : "character");
                     asset.setDescription(node.has("description") ? node.get("description").asText() : "");
-                    asset.setStatus("draft");
+                    asset.setStatus(AssetStatus.DRAFT.getCode());
                     assetMapper.insert(asset);
                 }
             }

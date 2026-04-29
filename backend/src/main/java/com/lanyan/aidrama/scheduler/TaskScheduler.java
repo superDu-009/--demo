@@ -1,5 +1,8 @@
 package com.lanyan.aidrama.scheduler;
 
+import com.lanyan.aidrama.common.ShotStatus;
+import com.lanyan.aidrama.common.TaskStatus;
+import com.lanyan.aidrama.common.TaskType;
 import com.lanyan.aidrama.entity.Shot;
 import com.lanyan.aidrama.entity.Task;
 import com.lanyan.aidrama.entity.Project;
@@ -73,13 +76,13 @@ public class TaskScheduler {
             return;
         }
 
-        if ("video_gen".equals(task.getType())) {
+        if (TaskType.VIDEO_GEN.getCode().equals(task.getType())) {
             pollVideoTask(task);
-        } else if ("script_analyze".equals(task.getType()) ||
-                   "shot_split".equals(task.getType()) ||
-                   "asset_extract".equals(task.getType()) ||
-                   "prompt_gen".equals(task.getType()) ||
-                   "image_gen".equals(task.getType())) {
+        } else if (TaskType.SCRIPT_ANALYZE.getCode().equals(task.getType()) ||
+                   TaskType.SHOT_SPLIT.getCode().equals(task.getType()) ||
+                   TaskType.ASSET_EXTRACT.getCode().equals(task.getType()) ||
+                   TaskType.PROMPT_GEN.getCode().equals(task.getType()) ||
+                   TaskType.IMAGE_GEN.getCode().equals(task.getType())) {
             // 同步任务已完成，不再需要轮询
             task.setNextPollTime(null);
             taskMapper.updateById(task);
@@ -96,7 +99,7 @@ public class TaskScheduler {
         switch (status) {
             case "succeeded" -> {
                 String videoUrl = result.get("videoUrl");
-                task.setStatus(2);
+                task.setStatus(TaskStatus.SUCCESS.getCode());
                 task.setResultUrl(videoUrl);
                 task.setNextPollTime(null);
                 taskMapper.updateById(task);
@@ -107,14 +110,14 @@ public class TaskScheduler {
                     if (shot != null) {
                         shot.setGeneratedVideoUrl(videoUrl);
                         shot.setLastFrameUrl(uploadLastFrameToTos(result.get("lastFrameUrl"), shot));
-                        shot.setVideoStatus("success");
+                        shot.setVideoStatus(ShotStatus.SUCCESS.getCode());
                         shotMapper.updateById(shot);
                     }
                 }
                 log.info("视频生成完成, taskId: {}, url: {}", task.getId(), videoUrl);
             }
             case "failed" -> {
-                task.setStatus(3);
+                task.setStatus(TaskStatus.FAILED.getCode());
                 task.setErrorMsg("视频生成失败: " + result.get("error"));
                 task.setNextPollTime(null);
                 taskMapper.updateById(task);
@@ -122,7 +125,7 @@ public class TaskScheduler {
                 if (task.getShotId() != null) {
                     Shot shot = shotMapper.selectById(task.getShotId());
                     if (shot != null) {
-                        shot.setVideoStatus("failed");
+                        shot.setVideoStatus(ShotStatus.FAILED.getCode());
                         shot.setErrorMsg("视频生成失败: " + result.get("error"));
                         shotMapper.updateById(shot);
                     }
@@ -180,7 +183,7 @@ public class TaskScheduler {
     private Long resolveProjectId(Shot shot) {
         Task task = taskMapper.selectOne(new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<Task>()
                 .eq(Task::getShotId, shot.getId())
-                .eq(Task::getType, "video_gen")
+                .eq(Task::getType, TaskType.VIDEO_GEN.getCode())
                 .orderByDesc(Task::getId)
                 .last("LIMIT 1"));
         if (task != null && task.getProjectId() != null) {
